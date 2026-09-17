@@ -1,0 +1,171 @@
+<Window x:Class="HassConnect.App.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:views="using:HassConnect.App.Views"
+    Title="HASS Connect">
+  <Grid x:Name="Root" Background="{ThemeResource WindowSurfaceBrush}">
+    <Grid.Resources>
+      <Style x:Key="FieldError" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="Foreground" Value="{ThemeResource SystemFillColorCriticalBrush}" />
+        <Setter Property="Margin" Value="0,4,0,0" />
+        <Setter Property="Visibility" Value="Collapsed" />
+      </Style>
+      <Style x:Key="StatusDot" TargetType="Border">
+        <Setter Property="Width" Value="8" />
+        <Setter Property="Height" Value="8" />
+        <Setter Property="CornerRadius" Value="4" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Background" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+      </Style>
+      <Style x:Key="HealthyStatusDot" TargetType="Border" BasedOn="{StaticResource StatusDot}">
+        <Setter Property="Background" Value="{ThemeResource SystemFillColorSuccessBrush}" />
+      </Style>
+      <Style x:Key="ConnectingStatusDot" TargetType="Border" BasedOn="{StaticResource StatusDot}">
+        <Setter Property="Background" Value="{ThemeResource AccentTextFillColorPrimaryBrush}" />
+      </Style>
+      <Style x:Key="CautionStatusDot" TargetType="Border" BasedOn="{StaticResource StatusDot}">
+        <Setter Property="Background" Value="{ThemeResource SystemFillColorCautionBrush}" />
+      </Style>
+      <Style x:Key="ErrorStatusDot" TargetType="Border" BasedOn="{StaticResource StatusDot}">
+        <Setter Property="Background" Value="{ThemeResource SystemFillColorCriticalBrush}" />
+      </Style>
+    </Grid.Resources>
+    <Grid.ColumnDefinitions><ColumnDefinition Width="176" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+    <Border BorderBrush="{ThemeResource SectionBorderBrush}" BorderThickness="0,0,1,0">
+      <Border.Background><SolidColorBrush Color="{ThemeResource NavigationSurfaceColor}" /></Border.Background>
+      <Grid>
+        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+        <StackPanel>
+          <StackPanel Orientation="Horizontal" Height="64" Margin="12,0" Spacing="6" VerticalAlignment="Center">
+            <Image Source="ms-appx:///Assets/hass-connect.png" Width="28" Height="28" />
+            <TextBlock Text="HASS Connect" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" />
+          </StackPanel>
+          <Border x:Name="StatusIdentity" Margin="8,0,8,12" Padding="8,10"
+                  HorizontalAlignment="Stretch"
+                  Background="Transparent" BorderThickness="0">
+            <Grid ColumnSpacing="8">
+              <Grid.ColumnDefinitions><ColumnDefinition Width="32" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+              <Grid Width="32" Height="32" VerticalAlignment="Center">
+                <FontIcon Glyph="&#xE7F4;" FontSize="30" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                <Border Width="12" Height="12" CornerRadius="6" BorderThickness="2"
+                        HorizontalAlignment="Right" VerticalAlignment="Bottom">
+                  <Border.Background><SolidColorBrush Color="{ThemeResource NavigationSurfaceColor}" /></Border.Background>
+                  <Border.BorderBrush><SolidColorBrush Color="{ThemeResource NavigationSurfaceColor}" /></Border.BorderBrush>
+                  <Border x:Name="SidebarStatusDot" Style="{StaticResource StatusDot}" />
+                </Border>
+              </Grid>
+              <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center" MinWidth="0">
+                <TextBlock x:Name="SidebarDeviceName" Text="This PC" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" MaxLines="1" />
+                <TextBlock x:Name="ConnectionStatus" Text="Not connected" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+              </StackPanel>
+            </Grid>
+          </Border>
+        </StackPanel>
+        <StackPanel Grid.Row="1" Margin="0,4,0,0">
+          <RadioButton x:Name="SensorsNav" Style="{StaticResource NavButton}" GroupName="Navigation" Tag="sensors" Click="Nav_Click" AutomationProperties.Name="Sensors page">
+            <StackPanel Orientation="Horizontal" Spacing="10"><FontIcon Glyph="&#xE9D9;" FontSize="14" /><TextBlock Text="Sensors" /></StackPanel>
+          </RadioButton>
+          <RadioButton x:Name="NotificationsNav" Style="{StaticResource NavButton}" GroupName="Navigation" Tag="notifications" Click="Nav_Click" AutomationProperties.Name="Notifications page">
+            <StackPanel Orientation="Horizontal" Spacing="10"><FontIcon Glyph="&#xE8F2;" FontSize="14" /><TextBlock Text="Notifications" /></StackPanel>
+          </RadioButton>
+        </StackPanel>
+        <RadioButton x:Name="SettingsNav" Grid.Row="2" Style="{StaticResource NavButton}" GroupName="Navigation" Tag="settings" Click="Nav_Click" Margin="7,2,7,10" AutomationProperties.Name="Settings page">
+          <StackPanel Orientation="Horizontal" Spacing="10"><FontIcon Glyph="&#xE713;" FontSize="14" /><TextBlock Text="Settings" /></StackPanel>
+        </RadioButton>
+      </Grid>
+    </Border>
+    <Grid Grid.Column="1" Margin="24,18,8,16" RowSpacing="16" MaxWidth="976" HorizontalAlignment="Stretch">
+      <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+      <TextBlock x:Name="PageTitle" Text="Sensors" FontSize="24" FontWeight="SemiBold" MinHeight="38" VerticalAlignment="Center" />
+      <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+        <StackPanel Spacing="12" HorizontalAlignment="Stretch" Margin="0,0,16,0">
+          <InfoBar x:Name="ErrorBar" IsOpen="False" IsClosable="True" Severity="Error" />
+          <views:SensorSettingsView x:Name="SensorsPage" />
+          <views:NotificationSettingsView x:Name="NotificationsPage" Visibility="Collapsed" />
+          <StackPanel x:Name="SettingsPage" Spacing="16" Visibility="Collapsed">
+            <Border Style="{StaticResource Card}">
+              <StackPanel Spacing="14">
+                <Grid>
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                  <TextBlock Text="Home Assistant" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center" />
+                  <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                    <Border x:Name="SettingsStatusDot" Style="{StaticResource StatusDot}" />
+                    <TextBlock x:Name="SettingsConnectionStatus" Text="Not connected" FontSize="12" />
+                  </StackPanel>
+                </Grid>
+                <StackPanel Spacing="10">
+                  <Grid ColumnSpacing="16" MinHeight="32">
+                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="110" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                    <TextBlock Text="Server" VerticalAlignment="Center" />
+                    <TextBox x:Name="ServerBox" Grid.Column="1" TextChanged="ConnectionField_Changed" PlaceholderText="https://home.example.com" AutomationProperties.Name="Home Assistant address" />
+                    <TextBlock x:Name="ServerError" Grid.Row="1" Grid.Column="1" Style="{StaticResource FieldError}" AutomationProperties.LiveSetting="Polite" />
+                  </Grid>
+                  <Grid ColumnSpacing="16" MinHeight="32">
+                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="110" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                    <TextBlock Text="Device" VerticalAlignment="Center" />
+                    <TextBox x:Name="DeviceBox" Grid.Column="1" TextChanged="ConnectionField_Changed" AutomationProperties.Name="Device name" />
+                    <TextBlock x:Name="DeviceError" Grid.Row="1" Grid.Column="1" Style="{StaticResource FieldError}" AutomationProperties.LiveSetting="Polite" />
+                  </Grid>
+                  <Grid ColumnSpacing="16" MinHeight="32">
+                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="110" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                    <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                      <TextBlock Text="Access token" VerticalAlignment="Center" />
+                      <Button Background="Transparent" BorderThickness="0" Padding="3" MinWidth="0" MinHeight="24" AutomationProperties.Name="How to get an access token">
+                        <FontIcon Glyph="&#xE946;" FontSize="12" />
+                        <Button.Flyout><Flyout><TextBlock Text="In Home Assistant, open your profile, select Security, then create a long-lived access token." TextWrapping="Wrap" MaxWidth="280" /></Flyout></Button.Flyout>
+                      </Button>
+                    </StackPanel>
+                    <Grid Grid.Column="1" Grid.ColumnSpan="2">
+                      <PasswordBox x:Name="TokenBox" Padding="11,5,40,5" PasswordChanged="Token_Changed" PlaceholderText="Paste your access token" PasswordRevealMode="Hidden" AutomationProperties.Name="Access token" />
+                      <Button x:Name="RevealTokenButton" Width="32" MinWidth="0" MinHeight="0" Margin="2"
+                              Padding="0" HorizontalAlignment="Right" VerticalAlignment="Stretch"
+                              Background="Transparent" BorderThickness="0" Click="RevealToken_Click"
+                              ToolTipService.ToolTip="Show access token" AutomationProperties.Name="Show access token">
+                        <SymbolIcon Symbol="View" />
+                      </Button>
+                    </Grid>
+                    <TextBlock x:Name="TokenError" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Style="{StaticResource FieldError}" AutomationProperties.LiveSetting="Polite" />
+                  </Grid>
+                  <TextBlock x:Name="ConnectionError" Style="{StaticResource FieldError}" AutomationProperties.LiveSetting="Polite" />
+                  <Button x:Name="SaveConnectionButton" Content="Connect" Style="{StaticResource AccentButtonStyle}" Click="Connect_Click" HorizontalAlignment="Right" />
+                </StackPanel>
+                <StackPanel Spacing="4">
+                  <TextBlock x:Name="ConnectionDetail" Style="{StaticResource SupportingText}" />
+                  <TextBlock x:Name="LastReport" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                </StackPanel>
+              </StackPanel>
+            </Border>
+            <StackPanel Spacing="8">
+              <TextBlock Text="General" FontSize="14" FontWeight="SemiBold" Margin="8,0,0,0" />
+              <Border Background="{ThemeResource CardSurfaceBrush}" BorderBrush="{ThemeResource SectionBorderBrush}" BorderThickness="1" CornerRadius="8">
+                <StackPanel>
+                  <views:SettingsRow Title="Appearance" Glyph="&#xE790;">
+                    <views:SettingsRow.TrailingContent>
+                      <ComboBox x:Name="ThemeBox" Width="120" SelectionChanged="Theme_Changed" AutomationProperties.Name="Appearance"><x:String>System</x:String><x:String>Light</x:String><x:String>Dark</x:String></ComboBox>
+                    </views:SettingsRow.TrailingContent>
+                  </views:SettingsRow>
+                  <views:SettingsRow x:Name="StartupRow" Title="Start with Windows" Glyph="&#xE7E8;" ToggleChanged="Startup_Toggled" />
+                  <views:SettingsRow Title="Diagnostic logs" Glyph="&#xE8A5;">
+                    <views:SettingsRow.TrailingContent><Button Content="Open folder" Width="120" Click="OpenLogs_Click" AutomationProperties.Name="Open diagnostic log folder" /></views:SettingsRow.TrailingContent>
+                  </views:SettingsRow>
+                  <views:SettingsRow Title="About HASS Connect" Glyph="&#xE946;" ShowDivider="False">
+                    <views:SettingsRow.TrailingContent><Button Content="About" Width="120" Click="OpenAbout_Click" /></views:SettingsRow.TrailingContent>
+                  </views:SettingsRow>
+                </StackPanel>
+              </Border>
+            </StackPanel>
+            <views:UpdateSettingsView />
+          </StackPanel>
+        </StackPanel>
+      </ScrollViewer>
+    </Grid>
+    <ContentDialog Grid.ColumnSpan="2" x:Name="AboutDialog" CloseButtonText="Close" DefaultButton="None">
+      <views:AboutView />
+    </ContentDialog>
+  </Grid>
+</Window>

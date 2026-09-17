@@ -1,0 +1,18 @@
+<UserControl x:Class="HassConnect.App.Views.SensorSettingsView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:HassConnect.App.Views">
+  <UserControl.Resources>
+    <ControlTemplate x:Key="SensorGroupCard" TargetType="ContentControl">
+      <Border Background="{ThemeResource CardSurfaceBrush}" BorderBrush="{ThemeResource SectionBorderBrush}" BorderThickness="1" CornerRadius="8">
+        <ContentPresenter Content="{TemplateBinding Content}" HorizontalContentAlignment="Stretch" />
+      </Border>
+    </ControlTemplate>
+  </UserControl.Resources>
+  <StackPanel Spacing="12">
+    <Border Background="{ThemeResource CardSurfaceBrush}" BorderBrush="{ThemeResource SectionBorderBrush}" BorderThickness="1" CornerRadius="8">
+      <local:SettingsRow x:Name="MasterRow" Title="Enable sensors" Glyph="&#xE9D9;" ShowDivider="False" ToggleChanged="MasterRow_Changed" />
+    </Border>
+    <StackPanel x:Name="SensorGroups" Spacing="16" />
+  </StackPanel>
+</UserControl>

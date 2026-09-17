@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
+    <UseWinUI>true</UseWinUI>
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>false</WindowsAppSDKSelfContained>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <PlatformTarget>x64</PlatformTarget>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <PublishTrimmed>false</PublishTrimmed>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <WindowsAppSdkVersion>2.4.0</WindowsAppSdkVersion>
+    <ApplicationIcon>Assets/app.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="$(WindowsAppSdkVersion)" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2705" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.12" />
+    <ProjectReference Include="../HassConnect.HomeAssistant/HassConnect.HomeAssistant.csproj" />
+    <ProjectReference Include="../HassConnect.Updates/HassConnect.Updates.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Update="Assets/app.ico" CopyToOutputDirectory="PreserveNewest" />
+    <Content Update="Assets/hass-connect.png" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <Target Name="PublishXamlResources" AfterTargets="ComputeFilesToPublish">
+    <ItemGroup>
+      <ResolvedFileToPublish Include="$(TargetDir)$(AssemblyName).pri" RelativePath="$(AssemblyName).pri" CopyToPublishDirectory="PreserveNewest" />
+      <_CompiledXaml Include="$(TargetDir)**/*.xbf" />
+      <ResolvedFileToPublish Include="@(_CompiledXaml)" RelativePath="%(_CompiledXaml.RecursiveDir)%(_CompiledXaml.Filename)%(_CompiledXaml.Extension)" CopyToPublishDirectory="PreserveNewest" />
+    </ItemGroup>
+  </Target>
+</Project>

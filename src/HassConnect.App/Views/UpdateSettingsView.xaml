@@ -1,0 +1,23 @@
+<UserControl x:Class="HassConnect.App.Views.UpdateSettingsView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <StackPanel Spacing="8">
+        <TextBlock Text="Updates" FontSize="14" FontWeight="SemiBold" Margin="8,0,0,0" />
+        <Border Background="{ThemeResource CardSurfaceBrush}" BorderBrush="{ThemeResource SectionBorderBrush}"
+                BorderThickness="1" CornerRadius="8" Padding="16,12">
+            <StackPanel Spacing="12">
+                <Grid ColumnSpacing="12">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="120" /></Grid.ColumnDefinitions>
+                    <StackPanel Spacing="4" VerticalAlignment="Center">
+                        <TextBlock x:Name="InstalledVersion" FontWeight="SemiBold" FontSize="14" />
+                        <TextBlock x:Name="UpdateStatus" Text="Check for a newer release." FontSize="12"
+                                   TextTrimming="CharacterEllipsis" AutomationProperties.LiveSetting="Polite"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+                    <Button x:Name="UpdateButton" Grid.Column="1" Width="120" Content="Check updates"
+                            VerticalAlignment="Center" Click="Update_Click" />
+                </Grid>
+            </StackPanel>
+        </Border>
+    </StackPanel>
+</UserControl>

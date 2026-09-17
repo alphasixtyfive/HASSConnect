@@ -1,0 +1,36 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util" xmlns:netfx="http://wixtoolset.org/schemas/v4/wxs/netfx" xmlns:bal="http://wixtoolset.org/schemas/v4/wxs/bal">
+  <Bundle Name="HASS Connect" Manufacturer="alphasixtyfive" Version="$(var.AppVersion)"
+          UpgradeCode="42a4f4aa-0bfb-4363-a3e8-1d181cf254f4" IconSourceFile="$(var.AppSource)\Assets\app.ico">
+    <BootstrapperApplication>
+      <bal:WixStandardBootstrapperApplication Theme="hyperlinkLicense" ThemeFile="SetupTheme.xml"
+          LicenseUrl="" LogoFile="$(var.AppSource)\Assets\hass-connect.png" SuppressOptionsUI="yes"
+          LaunchTarget="[LocalAppDataFolder]Programs\HASSConnect\HassConnect.App.exe"
+          LaunchWorkingFolder="[LocalAppDataFolder]Programs\HASSConnect" />
+      <Payload SourceFile="$(var.AppSource)\Assets\app.ico" Name="app.ico" />
+    </BootstrapperApplication>
+    <netfx:DotNetCoreSearch RuntimeType="core" Platform="x64" MajorVersion="10" Variable="DotNetRuntimeVersion" />
+    <util:RegistrySearch Root="HKLM" Key="SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64"
+                         Value="Version" Variable="VisualCppVersion" Result="value" Bitness="always64" />
+    <Chain>
+      <ExePackage Id="VisualCppRuntime" DisplayName="Microsoft Visual C++ Runtime"
+                  DetectCondition="VisualCppVersion &gt;= v$(var.VisualCppVersion)"
+                  InstallArguments="/install /quiet /norestart" PerMachine="yes" Permanent="yes" Cache="remove" Vital="yes">
+        <ExePackagePayload Name="VC_redist.x64.exe" DownloadUrl="$(var.VisualCppUrl)"
+                           Hash="$(var.VisualCppSha512)" Size="$(var.VisualCppSize)" />
+      </ExePackage>
+      <ExePackage Id="DotNetRuntime" DisplayName="Microsoft .NET Runtime"
+                  DetectCondition="DotNetRuntimeVersion &gt;= v$(var.DotNetVersion)"
+                  InstallArguments="/install /quiet /norestart" PerMachine="yes" Permanent="yes" Cache="remove" Vital="yes">
+        <ExePackagePayload Name="dotnet-runtime-$(var.DotNetVersion)-win-x64.exe"
+                           DownloadUrl="$(var.DotNetUrl)" Hash="$(var.DotNetSha512)" Size="$(var.DotNetSize)" />
+      </ExePackage>
+      <!-- The official installer checks and registers the shared packages for this user. -->
+      <ExePackage Id="WindowsAppRuntime" DisplayName="Microsoft Windows App Runtime"
+                  InstallArguments="--quiet" PerMachine="no" Permanent="yes" Cache="remove" Vital="yes" DetectCondition="0">
+        <ExePackagePayload Name="WindowsAppRuntimeInstall-x64.exe"
+                           DownloadUrl="$(var.WindowsAppRuntimeUrl)" Hash="$(var.WindowsAppRuntimeSha512)" Size="$(var.WindowsAppRuntimeSize)" />
+      </ExePackage>
+      <MsiPackage SourceFile="$(var.MsiSource)" Compressed="yes" Vital="yes" />
+    </Chain>
+  </Bundle>
+</Wix>

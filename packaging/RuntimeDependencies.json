@@ -1,0 +1,20 @@
+{
+  "DotNet": {
+    "Version": "10.0.11",
+    "Url": "https://builds.dotnet.microsoft.com/dotnet/Runtime/10.0.11/dotnet-runtime-10.0.11-win-x64.exe",
+    "Sha512": "694e0e0af26b2b8949b8eda8a3831ab31aeac79797d43d6ff8c8798eae642c0904852e641c47329d7d893408f25feab1530ca2b7a0c6ed0d991e0113466a4bf9",
+    "Size": 30604768
+  },
+  "WindowsAppRuntime": {
+    "Version": "2.4.0",
+    "Url": "https://download.microsoft.com/download/097dbd99-ea76-49de-994b-eb935c72dcf1/WindowsAppRuntimeInstall-x64.exe",
+    "Sha512": "ab866da27fb6b1696c5399881f6f741bf963ff0d6df6a8009bd2fe13ac604caddd4feb253cd86690e7ccda61337880b3c911273f9a5324386b33aa512ab1363e",
+    "Size": 116423480
+  },
+  "VisualCpp": {
+    "Version": "14.44.35211.0",
+    "Url": "https://download.visualstudio.microsoft.com/download/pr/bd1c8d9d-ba95-4eee-bc6e-df1fcc876373/CC0FF0EB1DC3F5188AE6300FAEF32BF5BEEBA4BDD6E8E445A9184072096B713B/VC_redist.x64.exe",
+    "Sha512": "e131b93acde5ffc76c19eb0784183a1e94dfa9fe06111a7830eae3ad8583895575dd4dca66aa70efddb243c95735a0105efcd3042b4b5ca445d3d8e8c39d957e",
+    "Size": 25635768
+  }
+}

@@ -1,0 +1,81 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Validate release version
+        shell: pwsh
+        env:
+          RELEASE_REF_TYPE: ${{ github.ref_type }}
+          RELEASE_REF_NAME: ${{ github.ref_name }}
+        run: |
+          if ($env:RELEASE_REF_TYPE -eq 'tag') {
+            ./tools/Get-ReleaseVersion.ps1 -Tag $env:RELEASE_REF_NAME
+            if (-not (Test-Path "docs/releases/$env:RELEASE_REF_NAME.md")) { throw 'Release notes are required.' }
+          } else {
+            ./tools/Get-ReleaseVersion.ps1
+          }
+      - name: Test and publish
+        shell: pwsh
+        run: ./build.ps1
+      - name: Build installer
+        shell: pwsh
+        run: ./packaging/Build-Installer.ps1
+      - name: Check installation and removal
+        shell: pwsh
+        run: |
+          $setup = (Get-ChildItem artifacts/release/*-Setup-x64.exe).FullName
+          $app = "$env:LOCALAPPDATA/Programs/HASSConnect/HassConnect.App.exe"
+          $install = Start-Process $setup -ArgumentList '/install /quiet /norestart' -Wait -PassThru
+          if ($install.ExitCode -ne 0 -or -not (Test-Path $app)) { throw 'Installation failed.' }
+          $runningApp = Start-Process $app -PassThru
+          Start-Sleep -Seconds 5
+          $runningApp.Refresh()
+          if ($runningApp.HasExited) { throw 'The installed app could not start.' }
+          $remove = Start-Process $setup -ArgumentList '/uninstall /quiet /norestart' -Wait -PassThru
+          $runningApp.Refresh()
+          if (-not $runningApp.HasExited) { throw 'Uninstall left the app running.' }
+          if ($remove.ExitCode -ne 0 -or (Test-Path $app)) { throw 'Uninstall failed.' }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HASSConnect-Windows-x64
+          path: |
+            artifacts/release/*-Setup-x64.exe
+            artifacts/release/SHA256SUMS.txt
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: windows
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: HASSConnect-Windows-x64
+          path: release
+      - name: Verify checksums and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          (cd release && sha256sum --check SHA256SUMS.txt)
+          gh release create "$RELEASE_TAG" release/*-Setup-x64.exe release/SHA256SUMS.txt \
+            --verify-tag --title "HASS Connect ${RELEASE_TAG#v}" \
+            --notes-file "docs/releases/$RELEASE_TAG.md" --latest

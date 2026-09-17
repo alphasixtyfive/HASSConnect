@@ -1,0 +1,55 @@
+<Theme xmlns="http://wixtoolset.org/schemas/v4/thmutil">
+  <Font Id="0" Height="-13" Weight="400" Foreground="windowtext" Background="window">Segoe UI</Font>
+  <Font Id="1" Height="-24" Weight="600" Foreground="windowtext">Segoe UI</Font>
+  <Font Id="2" Height="-12" Weight="400" Foreground="595959">Segoe UI</Font>
+  <Font Id="3" Height="-18" Weight="600" Foreground="windowtext">Segoe UI</Font>
+  <Font Id="4" Height="-1" Foreground="d9d9d9" Background="d9d9d9">Segoe UI</Font>
+  <Window Width="480" Height="296" FontId="0" Caption="HASS Connect Setup" IconFile="app.ico">
+    <ImageControl X="28" Y="28" Width="56" Height="56" ImageFile="logo.png" Visible="yes" />
+    <Label X="100" Y="36" Width="-24" Height="34" FontId="1" Visible="yes" DisablePrefix="yes">[WixBundleName]</Label>
+    <Label X="100" Y="65" Width="-24" Height="20" FontId="2" Visible="yes" DisablePrefix="yes">Version [WixBundleVersion]</Label>
+    <Label X="0" Y="-64" Width="0" Height="1" FontId="4" Visible="yes" />
+    <Page Name="Loading">
+      <Label X="24" Y="114" Width="-24" Height="24" FontId="0">Preparing setup...</Label>
+    </Page>
+    <Page Name="Install">
+      <Label X="28" Y="118" Width="-28" Height="44" FontId="0">Connect this PC to Home Assistant for sensors, camera snapshots and actionable notifications.</Label>
+      <Label X="28" Y="178" Width="-28" Height="40" FontId="2">Installs for your Windows account.&#10;Microsoft components are downloaded during setup.</Label>
+      <Button Name="InstallButton" X="-124" Y="-18" Width="112" Height="30" TabStop="yes" FontId="0">Install</Button>
+      <Button Name="InstallCancelButton" X="-24" Y="-18" Width="88" Height="30" TabStop="yes" FontId="0"><Text>Cancel</Text><CloseWindowAction /></Button>
+    </Page>
+    <Page Name="Progress">
+      <Label X="24" Y="114" Width="-24" Height="28" FontId="3"><Text>Installing HASS Connect</Text><Text Condition="WixBundleAction = 4">Removing HASS Connect</Text><Text Condition="WixBundleAction = 8">Repairing HASS Connect</Text></Label>
+      <Label Name="OverallProgressPackageText" X="24" Y="154" Width="-24" Height="40" FontId="0">Preparing...</Label>
+      <Progressbar Name="OverallCalculatedProgressbar" X="24" Y="202" Width="-24" Height="12" />
+      <Button Name="ProgressCancelButton" X="-24" Y="-18" Width="88" Height="30" TabStop="yes" FontId="0">Cancel</Button>
+    </Page>
+    <Page Name="Modify">
+      <Label X="24" Y="114" Width="-24" Height="28" FontId="3">HASS Connect is installed</Label>
+      <Label X="24" Y="150" Width="-24" Height="64" FontId="0">Repair the installation or remove the app from this PC. Your saved settings are kept when you uninstall.</Label>
+      <Button Name="RepairButton" X="-248" Y="-18" Width="100" Height="30" TabStop="yes" FontId="0" HideWhenDisabled="yes">Repair</Button>
+      <Button Name="UninstallButton" X="-124" Y="-18" Width="112" Height="30" TabStop="yes" FontId="0">Uninstall</Button>
+      <Button Name="ModifyCancelButton" X="-24" Y="-18" Width="88" Height="30" TabStop="yes" FontId="0"><Text>Close</Text><CloseWindowAction /></Button>
+    </Page>
+    <Page Name="Success">
+      <Label X="24" Y="114" Width="-24" Height="28" FontId="3"><Text>All done</Text><Text Condition="WixBundleAction = 6">Ready to connect</Text><Text Condition="WixBundleAction = 4">HASS Connect was removed</Text></Label>
+      <Label X="24" Y="150" Width="-24" Height="60" FontId="0" VisibleCondition="WixBundleAction = 6">Open the app to connect to Home Assistant and choose your sensors.</Label>
+      <Label X="24" Y="204" Width="-24" Height="40" FontId="2" VisibleCondition="WixStdBARestartRequired">Restart Windows to finish setup.</Label>
+      <Button Name="LaunchButton" X="-124" Y="-18" Width="164" Height="30" TabStop="yes" FontId="0" HideWhenDisabled="yes">Open HASS Connect</Button>
+      <Button Name="SuccessRestartButton" X="-124" Y="-18" Width="164" Height="30" TabStop="yes" FontId="0" HideWhenDisabled="yes">Restart Windows</Button>
+      <Button Name="SuccessCloseButton" X="-24" Y="-18" Width="88" Height="30" TabStop="yes" FontId="0"><Text>Close</Text><CloseWindowAction /></Button>
+    </Page>
+    <Page Name="Failure">
+      <Label X="24" Y="114" Width="-24" Height="28" FontId="3">Setup could not finish</Label>
+      <Hypertext Name="FailureMessageText" X="24" Y="148" Width="-24" Height="50" FontId="0" TabStop="yes" HideWhenDisabled="yes" />
+      <Hypertext Name="FailureLogFileLink" X="24" Y="204" Width="-24" Height="24" FontId="0" TabStop="yes" HideWhenDisabled="yes">Open the &lt;a href="#"&gt;setup log&lt;/a&gt; for details.</Hypertext>
+      <Button Name="FailureRestartButton" X="-124" Y="-18" Width="164" Height="30" TabStop="yes" FontId="0" HideWhenDisabled="yes">Restart Windows</Button>
+      <Button Name="FailureCloseButton" X="-24" Y="-18" Width="88" Height="30" TabStop="yes" FontId="0"><Text>Close</Text><CloseWindowAction /></Button>
+    </Page>
+    <Page Name="Help">
+      <Label X="24" Y="114" Width="-24" Height="108" FontId="0">/install, /repair or /uninstall&#10;&#10;/quiet for unattended setup&#10;/norestart to prevent a restart&#10;/log path to save a setup log</Label>
+      <Button Name="HelpCloseButton" X="-24" Y="-18" Width="88" Height="30" TabStop="yes" FontId="0"><Text>Close</Text><CloseWindowAction /></Button>
+    </Page>
+  </Window>
+</Theme>
+

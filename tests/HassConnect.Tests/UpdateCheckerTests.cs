@@ -1,0 +1,117 @@
+using System.Net;
+using HassConnect.Updates;
+
+namespace HassConnect.Tests;
+
+public sealed class UpdateCheckerTests
+{
+    [Fact]
+    public async Task EmptyRepositoryDoesNotContactNetwork()
+    {
+        using var client = new HttpClient(new Handler(_ => throw new InvalidOperationException("Unexpected network request")));
+        var result = await new UpdateChecker(client).CheckAsync(null, "0.1.0");
+        Assert.Equal(UpdateState.NotConfigured, result.State);
+    }
+
+    [Theory]
+    [InlineData("v0.2.0", "0.1.0", UpdateState.Available)]
+    [InlineData("v0.1.0", "0.1.0", UpdateState.Current)]
+    [InlineData("v0.1.0", "0.2.0", UpdateState.Current)]
+    [InlineData("v0.2.0-beta", "0.1.0", UpdateState.Unavailable)]
+    public async Task ComparesReleaseVersions(string tag, string current, UpdateState expected)
+    {
+        using var client = new HttpClient(new Handler(_ => new(HttpStatusCode.OK)
+        {
+            Content = new StringContent($$"""{"draft":false,"prerelease":false,"tag_name":"{{tag}}"}""")
+        }));
+        var result = await new UpdateChecker(client).CheckAsync("example/app", current);
+        Assert.Equal(expected, result.State);
+        if (expected == UpdateState.Available) Assert.Equal("https://github.com/example/app/releases/tag/v0.2.0", result.ReleasePage!.AbsoluteUri);
+    }
+
+    [Fact]
+    public async Task MissingReleaseIsNotReportedAsUpToDate()
+    {
+        using var client = new HttpClient(new Handler(_ => new(HttpStatusCode.NotFound)));
+        Assert.Equal(UpdateState.Unavailable, (await new UpdateChecker(client).CheckAsync("example/app", "0.1.0")).State);
+    }
+
+    [Theory]
+    [InlineData("not-json")]
+    [InlineData("{}")]
+    [InlineData("{\"draft\":false,\"prerelease\":true,\"tag_name\":\"v0.2.0\"}")]
+    [InlineData("{\"draft\":true,\"prerelease\":false,\"tag_name\":\"v0.2.0\"}")]
+    [InlineData("{\"draft\":\"false\",\"prerelease\":false,\"tag_name\":\"v0.2.0\"}")]
+    [InlineData("{\"draft\":false,\"prerelease\":false,\"tag_name\":42}")]
+    [InlineData("null")]
+    public async Task InvalidOrPreviewReleaseIsNotOffered(string payload)
+    {
+        using var client = new HttpClient(new Handler(_ => new(HttpStatusCode.OK) { Content = new StringContent(payload) }));
+        var result = await new UpdateChecker(client).CheckAsync("example/app", "0.1.0");
+        Assert.Equal(UpdateState.Unavailable, result.State);
+        Assert.Null(result.ReleasePage);
+    }
+
+    [Fact]
+    public async Task IdentifiesActualVersionAndPinsApiContract()
+    {
+        using var client = new HttpClient(new Handler(request =>
+        {
+            Assert.Equal("HASSConnect/1.2.3", request.Headers.UserAgent.ToString());
+            Assert.Equal("2022-11-28", Assert.Single(request.Headers.GetValues("X-GitHub-Api-Version")));
+            Assert.Equal("https://api.github.com/repos/example/app/releases/latest", request.RequestUri!.AbsoluteUri);
+            return new(HttpStatusCode.NotFound);
+        }));
+        await new UpdateChecker(client).CheckAsync("example/app", "1.2.3");
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.Forbidden)]
+    [InlineData(HttpStatusCode.TooManyRequests)]
+    public async Task ExplainsRateLimits(HttpStatusCode status)
+    {
+        using var client = new HttpClient(new Handler(_ =>
+        {
+            var response = new HttpResponseMessage(status);
+            response.Headers.Add("X-RateLimit-Remaining", "0");
+            return response;
+        }));
+        var result = await new UpdateChecker(client).CheckAsync("example/app", "1.2.3");
+        Assert.Equal(UpdateState.Unavailable, result.State);
+        Assert.Contains("request limit", result.Message);
+    }
+
+    [Fact]
+    public async Task ReportsNetworkFailureWithoutOfferingARelease()
+    {
+        using var client = new HttpClient(new Handler(_ => throw new HttpRequestException()));
+        var result = await new UpdateChecker(client).CheckAsync("example/app", "1.2.3");
+        Assert.Equal(UpdateState.Unavailable, result.State);
+        Assert.Null(result.ReleasePage);
+    }
+
+    [Fact]
+    public async Task DistinguishesTimeoutFromCallerCancellation()
+    {
+        using var client = new HttpClient(new Handler(_ => throw new TaskCanceledException()));
+        var checker = new UpdateChecker(client);
+        Assert.Contains("timed out", (await checker.CheckAsync("example/app", "1.2.3")).Message);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => checker.CheckAsync("example/app", "1.2.3", cancellation.Token));
+    }
+
+    [Fact]
+    public async Task RejectsInvalidConfigurationBeforeContactingGitHub()
+    {
+        using var client = new HttpClient(new Handler(_ => throw new InvalidOperationException("Unexpected request")));
+        var checker = new UpdateChecker(client);
+        Assert.Equal(UpdateState.Unavailable, (await checker.CheckAsync("example/app?token=secret", "1.2.3")).State);
+        Assert.Equal(UpdateState.Unavailable, (await checker.CheckAsync("example/app", "1.2.3.4")).State);
+    }
+
+    private sealed class Handler(Func<HttpRequestMessage, HttpResponseMessage> respond) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) => Task.FromResult(respond(request));
+    }
+}

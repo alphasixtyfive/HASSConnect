@@ -1,0 +1,13 @@
+<Project Sdk="WixToolset.Sdk/5.0.2">
+  <PropertyGroup>
+    <OutputType>Package</OutputType>
+    <!-- ICE03 rejects language metadata in Microsoft's WinUI binaries.
+         ICE91 assumes a per-machine option; this package is per-user only. -->
+    <SuppressIces>ICE03;ICE91</SuppressIces>
+    <InstallerPlatform>x64</InstallerPlatform>
+    <OutputName>HASSConnect-$(Version)-x64</OutputName>
+    <DefaultItemExcludes>$(DefaultItemExcludes);Bundle.wxs;obj/**;bin/**</DefaultItemExcludes>
+    <DefineConstants>AppVersion=$(Version);AppSource=$(AppSource)</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup><Compile Include="$(GeneratedFiles)" /></ItemGroup>
+</Project>

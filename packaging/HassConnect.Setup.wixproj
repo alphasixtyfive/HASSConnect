@@ -1,0 +1,9 @@
+<Project Sdk="WixToolset.Sdk/5.0.2">
+  <PropertyGroup>
+    <OutputType>Bundle</OutputType>
+    <OutputName>HASSConnect-$(Version)-Setup-x64</OutputName>
+    <DefaultItemExcludes>$(DefaultItemExcludes);Package.wxs;obj/**;bin/**</DefaultItemExcludes>
+    <DefineConstants>AppVersion=$(Version);AppSource=$(AppSource);MsiSource=$(MsiSource);DotNetVersion=$(DotNetVersion);DotNetUrl=$(DotNetUrl);DotNetSha512=$(DotNetSha512);DotNetSize=$(DotNetSize);WindowsAppRuntimeVersion=$(WindowsAppRuntimeVersion);WindowsAppRuntimeUrl=$(WindowsAppRuntimeUrl);WindowsAppRuntimeSha512=$(WindowsAppRuntimeSha512);WindowsAppRuntimeSize=$(WindowsAppRuntimeSize);VisualCppVersion=$(VisualCppVersion);VisualCppUrl=$(VisualCppUrl);VisualCppSha512=$(VisualCppSha512);VisualCppSize=$(VisualCppSize)</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup><PackageReference Include="WixToolset.BootstrapperApplications.wixext" Version="5.0.2" /><PackageReference Include="WixToolset.Netfx.wixext" Version="5.0.2" /><PackageReference Include="WixToolset.Util.wixext" Version="5.0.2" /></ItemGroup>
+</Project>

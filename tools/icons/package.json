@@ -1,0 +1,7 @@
+{
+  "name": "hass-connect-icons",
+  "private": true,
+  "type": "module",
+  "scripts": { "build": "node build-icons.mjs" },
+  "devDependencies": { "@resvg/resvg-js": "2.6.2" }
+}

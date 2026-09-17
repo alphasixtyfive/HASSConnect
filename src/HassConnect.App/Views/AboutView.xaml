@@ -1,0 +1,23 @@
+<UserControl
+    x:Class="HassConnect.App.Views.AboutView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <StackPanel Width="420" MaxWidth="420" Spacing="14">
+        <Grid ColumnSpacing="12">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="48" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+            <Image Source="ms-appx:///Assets/hass-connect.png" Width="48" Height="48" VerticalAlignment="Center"
+                   AutomationProperties.AccessibilityView="Raw" />
+            <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                <TextBlock x:Name="ProductName" FontSize="18" FontWeight="SemiBold" TextWrapping="Wrap" />
+                <TextBlock x:Name="VersionText" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+            </StackPanel>
+        </Grid>
+        <TextBlock FontSize="13" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}">
+            <Span xml:space="preserve"><Run Text="By " /><Hyperlink x:Name="DeveloperLink" ToolTipService.ToolTip="github.com/alphasixtyfive"><Run x:Name="DeveloperName" /></Hyperlink><Run Text=". Licensed under the " /><Hyperlink x:Name="LicenseLink" ToolTipService.ToolTip="MIT License on github.com">MIT License</Hyperlink><Run Text="." /></Span>
+        </TextBlock>
+        <Border Height="1" Background="{ThemeResource TextFillColorSecondaryBrush}" Opacity="0.35" />
+        <TextBlock FontSize="13" TextWrapping="WrapWholeWords" LineHeight="26">
+            <Span xml:space="preserve"><Hyperlink x:Name="RepositoryLink" ToolTipService.ToolTip="Project on github.com"><Run Text="GitHub" /><Run Text="  &#xE8A7;" FontFamily="Segoe Fluent Icons" FontSize="10" /></Hyperlink><Run Text="      " /><Hyperlink x:Name="ReleasesLink" ToolTipService.ToolTip="Releases on github.com"><Run Text="Releases" /><Run Text="  &#xE8A7;" FontFamily="Segoe Fluent Icons" FontSize="10" /></Hyperlink><Run Text="      " /><Hyperlink x:Name="IssuesLink" ToolTipService.ToolTip="Issue tracker on github.com"><Run Text="Report an issue" /><Run Text="  &#xE8A7;" FontFamily="Segoe Fluent Icons" FontSize="10" /></Hyperlink></Span>
+        </TextBlock>
+    </StackPanel>
+</UserControl>
