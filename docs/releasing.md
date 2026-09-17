@@ -1,6 +1,6 @@
 # Releasing
 
-The first release is `v0.1.0`. The version lives in `Directory.Build.props`.
+The current release version lives in `Directory.Build.props`.
 
 ## Before publishing
 
