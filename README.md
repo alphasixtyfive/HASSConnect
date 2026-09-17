@@ -13,6 +13,8 @@
   &nbsp; · &nbsp;
   <a href="docs/notifications.md">Notification examples</a>
   &nbsp; · &nbsp;
+  <a href="docs/commands.md">PC commands</a>
+  &nbsp; · &nbsp;
   <a href="https://github.com/alphasixtyfive/HASSConnect/issues">Report an issue</a>
 </p>
 
@@ -51,14 +53,18 @@ All sensors are off by default. Enabled sensors report every 15 seconds.
 | Session locked | Whether the current Windows session is locked |
 | Display state | On, dimmed or off for the current session |
 | Last seen | Timestamp of the latest report |
+| Microphone / webcam | Whether an application is using the device |
 | Battery level | Charge remaining, where a battery is present |
+| Battery charging | Whether the system battery is charging |
+| System disk | Used percentage and free space |
 | IP address | Local IPv4 address used to reach Home Assistant |
 | Network adapter | Adapter used for that connection |
 | Download / upload speed | Total traffic on that adapter, in Mbit/s |
 
 Sensors can be disabled in either the app or HA. **Enable sensors** pauses reporting
 without changing your selections. HA retains the last values while the PC is offline;
-[Last seen can be used to detect stale reports](docs/sensors.md).
+enable **Last seen** and add a [freshness condition](docs/sensors.md#guard-automations-against-stale-readings)
+before automating on CPU usage, idle time or other readings.
 
 ## Notifications
 
@@ -87,6 +93,12 @@ the alert context; URI buttons open the browser.
 
 [Notification examples](docs/notifications.md) cover clearing alerts, images and click events.
 The app must be running and connected. Windows Do not disturb can suppress banners.
+
+## Controls
+
+The **Controls** page can opt this PC into a small, fixed command set: lock, display sleep,
+system sleep, media playback, mute and volume level. PC control is off by default, and every
+command can be disabled independently. See the [PC command reference](docs/commands.md).
 
 ## Privacy and updates
 

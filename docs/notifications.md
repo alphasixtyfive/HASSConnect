@@ -60,6 +60,12 @@ Use an image URL in YAML, not a Windows file path.
 
 Notification preferences are independent of Enable sensors. Turning notifications off stops the receiver and preserves the sound choice.
 
+## PC control
+
+Open **Controls** and turn on **Enable PC control** to accept selected commands.
+See the [PC command reference](commands.md) for payloads, safety behavior, Windows
+implementation details and the phone-friendly dashboard.
+
 ## Desktop activation
 
 Windows delivers clicks through the native notification callback. No URI handler

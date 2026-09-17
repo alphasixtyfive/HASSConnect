@@ -1,0 +1,147 @@
+# Replace every occurrence of notify.mobile_app_your_pc with this PC's notify action.
+# Paste this list item under `views:` in a dashboard's raw YAML configuration.
+- title: PC Controls
+  path: pc-controls
+  icon: mdi:desktop-tower-monitor
+  cards:
+    - type: markdown
+      content: >-
+        ## PC Controls
+
+        HASS Connect must be running and connected. Enable each command you want
+        to test on the app's **Controls** page.
+
+    - type: grid
+      title: System
+      columns: 2
+      square: false
+      cards:
+        - type: button
+          name: Lock PC
+          icon: mdi:lock
+          tap_action:
+            action: perform-action
+            perform_action: notify.mobile_app_your_pc
+            confirmation:
+              text: Lock this PC?
+            data:
+              message: command_lock
+
+        - type: button
+          name: Turn off displays
+          icon: mdi:monitor-off
+          tap_action:
+            action: perform-action
+            perform_action: notify.mobile_app_your_pc
+            confirmation:
+              text: Turn off this PC's displays?
+            data:
+              message: command_monitor_sleep
+
+        - type: button
+          name: Sleep PC
+          icon: mdi:power-sleep
+          tap_action:
+            action: perform-action
+            perform_action: notify.mobile_app_your_pc
+            confirmation:
+              text: Put this PC to sleep?
+            data:
+              message: command_sleep
+
+    - type: grid
+      title: Media
+      columns: 2
+      square: false
+      cards:
+        - type: button
+          name: Previous
+          icon: mdi:skip-previous
+          tap_action:
+            action: perform-action
+            perform_action: notify.mobile_app_your_pc
+            data:
+              message: command_media
+              data:
+                media_command: previous
+
+        - type: button
+          name: Play / pause
+          icon: mdi:play-pause
+          tap_action:
+            action: perform-action
+            perform_action: notify.mobile_app_your_pc
+            data:
+              message: command_media
+              data:
+                media_command: play_pause
+
+        - type: button
+          name: Next
+          icon: mdi:skip-next
+          tap_action:
+            action: perform-action
+            perform_action: notify.mobile_app_your_pc
+            data:
+              message: command_media
+              data:
+                media_command: next
+
+        - type: button
+          name: Stop
+          icon: mdi:stop
+          tap_action:
+            action: perform-action
+            perform_action: notify.mobile_app_your_pc
+            data:
+              message: command_media
+              data:
+                media_command: stop
+
+    - type: grid
+      title: Volume
+      columns: 2
+      square: false
+      cards:
+        - type: button
+          name: Mute / unmute
+          icon: mdi:volume-mute
+          tap_action:
+            action: perform-action
+            perform_action: notify.mobile_app_your_pc
+            data:
+              message: command_volume_mute
+
+        - type: button
+          name: Volume 25%
+          icon: mdi:volume-low
+          tap_action:
+            action: perform-action
+            perform_action: notify.mobile_app_your_pc
+            data:
+              message: command_volume_level
+              data:
+                volume_level: 25
+
+        - type: button
+          name: Volume 50%
+          icon: mdi:volume-medium
+          tap_action:
+            action: perform-action
+            perform_action: notify.mobile_app_your_pc
+            data:
+              message: command_volume_level
+              data:
+                volume_level: 50
+
+        - type: button
+          name: Volume 75%
+          icon: mdi:volume-high
+          tap_action:
+            action: perform-action
+            perform_action: notify.mobile_app_your_pc
+            data:
+              message: command_volume_level
+              data:
+                volume_level: 75
+
