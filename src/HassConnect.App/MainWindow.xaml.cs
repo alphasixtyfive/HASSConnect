@@ -15,17 +15,19 @@ public sealed partial class MainWindow : Window
 {
     private readonly SensorSession? _session;
     private readonly TrayIcon _tray;
+    private readonly nint _windowHandle;
     private bool _quitting;
     private bool _loading = true;
     private bool _connecting;
+    private bool _loadingDashboards;
     private double _windowScale;
     internal event Action? QuitRequested;
 
     internal MainWindow(WindowsNotifications notifications, DesktopActivation activation)
     {
         InitializeComponent();
-        var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
-        var scale = GetDpiForWindow(hwnd) / 96d;
+        _windowHandle = WinRT.Interop.WindowNative.GetWindowHandle(this);
+        var scale = GetDpiForWindow(_windowHandle) / 96d;
         var workArea = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary).WorkArea;
         AppWindow.Resize(new Windows.Graphics.SizeInt32(
             Math.Min((int)(800 * scale), workArea.Width - (int)(32 * scale)),
@@ -35,11 +37,12 @@ public sealed partial class MainWindow : Window
         SystemBackdrop = new MicaBackdrop();
         Root.ActualThemeChanged += (_, _) => UpdateTitleBar();
         Activated += (_, args) => { if (args.WindowActivationState == WindowActivationState.Deactivated) HideToken(); };
-        _tray = new TrayIcon(hwnd, ShowWindow, () => _ = QuitAsync(), OpenHomeAssistant);
+        _tray = new TrayIcon(_windowHandle, ShowWindow, () => _ = QuitAsync(), OpenHomeAssistant);
         AppWindow.Closing += (_, args) => { if (!_quitting) { args.Cancel = true; AppWindow.Hide(); } };
         try
         {
-            _session = new SensorSession(new SettingsStore(), hwnd, new NotificationService(notifications, activation));
+            _session = new SensorSession(new SettingsStore(), _windowHandle,
+                new NotificationService(notifications, activation, new WindowsPcControl()));
             _session.Changed += () => DispatcherQueue.TryEnqueue(Refresh);
             ServerBox.Text = _session.Settings.ServerUrl;
             DeviceBox.Text = _session.Settings.DeviceName;
@@ -55,6 +58,8 @@ public sealed partial class MainWindow : Window
             NotificationsPage.EnabledChanged += Notifications_Changed;
             NotificationsPage.SoundChanged += NotificationSound_Changed;
             NotificationsPage.TestRequested += TestNotification_Requested;
+            ControlsPage.EnabledChanged += PcControl_Changed;
+            ControlsPage.CommandChanged += PcCommand_Changed;
             Refresh();
         }
         catch (Exception ex)
@@ -67,16 +72,22 @@ public sealed partial class MainWindow : Window
         StartupRow.IsOn = run?.GetValue("HassConnect") is string;
         _loading = false;
         SelectPage(_session?.IsRegistered == true ? "sensors" : "settings");
-        Root.Loaded += (_, _) =>
+        Root.Loaded += async (_, _) =>
         {
             UpdateTitleBar();
             Root.XamlRoot.Changed += (_, _) => UpdateWindowMinimumSize();
             UpdateWindowMinimumSize();
             if (Environment.GetCommandLineArgs().Contains("--tray")) AppWindow.Hide();
+            await LoadDashboardsAsync(showErrors: false);
         };
     }
 
-    internal void ShowWindow() { AppWindow.Show(); Activate(); }
+    internal void ShowWindow()
+    {
+        AppWindow.Show();
+        WindowActivation.RestoreAndActivate(_windowHandle);
+        Activate();
+    }
 
     private async void OpenHomeAssistant()
     {
@@ -84,7 +95,8 @@ public sealed partial class MainWindow : Window
         try
         {
             var server = HassConnect.Core.ServerAddress.Parse(_session.Settings.ServerUrl);
-            if (!await Windows.System.Launcher.LaunchUriAsync(server))
+            var destination = HassConnect.Core.HomeAssistantNavigation.Resolve(server, _session.Settings.HomeAssistantPath);
+            if (!await Windows.System.Launcher.LaunchUriAsync(destination))
                 throw new InvalidOperationException("Windows could not open the browser.");
         }
         catch (Exception ex)
@@ -136,7 +148,9 @@ public sealed partial class MainWindow : Window
         LastReport.Visibility = _session.IsRegistered ? Visibility.Visible : Visibility.Collapsed;
         SensorsPage.Update(_session.Settings, _session.Values);
         NotificationsPage.Update(_session.Settings, _session.NotificationsSupported, _session.IsRegistered,
-            _session.NotificationsConnected, _session.NotificationStatus);
+            _session.RemoteMessagesConnected, _session.RemoteMessageStatus);
+        ControlsPage.Update(_session.Settings, _session.IsRegistered,
+            _session.RemoteMessagesConnected, _session.RemoteMessageStatus);
         RefreshConnectionAction();
         _tray.CanOpenHomeAssistant = !string.IsNullOrWhiteSpace(_session.Settings.ServerUrl);
         _tray.SetStatus(_session.Connected && _session.Paused ? "Connected · sensors disabled" : _session.Status);
@@ -153,11 +167,19 @@ public sealed partial class MainWindow : Window
         if (page != "notifications") NotificationsPage.ClearTransientFeedback();
         SensorsNav.IsChecked = page == "sensors";
         NotificationsNav.IsChecked = page == "notifications";
+        ControlsNav.IsChecked = page == "controls";
         SettingsNav.IsChecked = page == "settings";
         NotificationsPage.Visibility = page == "notifications" ? Visibility.Visible : Visibility.Collapsed;
+        ControlsPage.Visibility = page == "controls" ? Visibility.Visible : Visibility.Collapsed;
         SensorsPage.Visibility = page == "sensors" ? Visibility.Visible : Visibility.Collapsed;
         SettingsPage.Visibility = page == "settings" ? Visibility.Visible : Visibility.Collapsed;
-        PageTitle.Text = page switch { "notifications" => "Notifications", "settings" => "Settings", _ => "Sensors" };
+        PageTitle.Text = page switch
+        {
+            "notifications" => "Notifications",
+            "controls" => "Controls",
+            "settings" => "Settings",
+            _ => "Sensors"
+        };
     }
 
     private async void Connect_Click(object sender, RoutedEventArgs args)
@@ -174,6 +196,7 @@ public sealed partial class MainWindow : Window
             TokenBox.Password = "";
             TokenBox.PlaceholderText = "Saved token";
             ServerBox.IsReadOnly = DeviceBox.IsReadOnly = _session.IsRegistered;
+            await LoadDashboardsAsync(showErrors: false);
         }
         catch (Exception ex) { ShowConnectionError(ex); }
         finally
@@ -225,6 +248,50 @@ public sealed partial class MainWindow : Window
         SaveConnectionButton.Content = _connecting ? "Connecting…" : !_session.IsRegistered ? "Connect" : changed ? "Save" : "Reconnect";
         SaveConnectionButton.Visibility = _session.Connected && !changed && !_connecting ? Visibility.Collapsed : Visibility.Visible;
         SaveConnectionButton.IsEnabled = !_connecting;
+    }
+
+    private async void RefreshDashboards_Click(object sender, RoutedEventArgs args) =>
+        await LoadDashboardsAsync(showErrors: true);
+
+    private async void Dashboard_Changed(object sender, SelectionChangedEventArgs args)
+    {
+        if (_loadingDashboards || _session is null || DashboardBox.SelectedItem is not HomeAssistantDashboard dashboard) return;
+        try { await _session.SetHomeAssistantPathAsync(dashboard.Path); }
+        catch (Exception ex) { ShowError(UserMessage(ex)); }
+    }
+
+    private async Task LoadDashboardsAsync(bool showErrors)
+    {
+        if (_session is null || !_session.IsRegistered || _loadingDashboards) return;
+        _loadingDashboards = true;
+        DashboardBox.IsEnabled = RefreshDashboardsButton.IsEnabled = false;
+        var savedPath = _session.Settings.HomeAssistantPath ?? "";
+        ShowDashboardChoices([], savedPath);
+        try
+        {
+            ShowDashboardChoices(await _session.GetDashboardsAsync(), savedPath);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Write("Dashboard list", ex.GetType().Name);
+            if (showErrors) ShowError(UserMessage(ex));
+        }
+        finally
+        {
+            _loadingDashboards = false;
+            DashboardBox.IsEnabled = RefreshDashboardsButton.IsEnabled = _session.IsRegistered;
+        }
+    }
+
+    private void ShowDashboardChoices(IEnumerable<HomeAssistantDashboard> dashboards, string savedPath)
+    {
+        var choices = new List<HomeAssistantDashboard> { new("Default Home Assistant page", "") };
+        choices.AddRange(dashboards);
+        if (savedPath.Length > 0 && choices.All(choice => !string.Equals(choice.Path, savedPath, StringComparison.OrdinalIgnoreCase)))
+            choices.Add(new($"Saved dashboard ({savedPath})", savedPath));
+        DashboardBox.ItemsSource = choices;
+        DashboardBox.SelectedItem = choices.First(choice =>
+            string.Equals(choice.Path, savedPath, StringComparison.OrdinalIgnoreCase));
     }
 
     private async void OpenAbout_Click(object sender, RoutedEventArgs args)
@@ -330,7 +397,9 @@ public sealed partial class MainWindow : Window
 
     private void ApplyTheme(string theme) => Root.RequestedTheme = theme switch
     {
-        "Light" => ElementTheme.Light, "Dark" => ElementTheme.Dark, _ => ElementTheme.Default
+        "Light" => ElementTheme.Light,
+        "Dark" => ElementTheme.Dark,
+        _ => ElementTheme.Default
     };
 
     private void UpdateTitleBar()
@@ -351,13 +420,36 @@ public sealed partial class MainWindow : Window
     private void Startup_Toggled(object? sender, EventArgs e)
     {
         if (_loading) return;
+        var enabled = StartupRow.IsOn;
         try
         {
             using var key = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run");
-            if (StartupRow.IsOn) key.SetValue("HassConnect", $"\"{Environment.ProcessPath}\" --tray");
+            if (enabled) key.SetValue("HassConnect", $"\"{Environment.ProcessPath}\" --tray");
             else key.DeleteValue("HassConnect", false);
         }
+        catch (Exception ex)
+        {
+            StartupRow.IsOn = !enabled;
+            ShowError(UserMessage(ex));
+        }
+    }
+
+    private async void PcControl_Changed(bool enabled)
+    {
+        if (_session is null) return;
+        ControlsPage.SetMasterBusy(true);
+        try { await _session.SetPcControlEnabledAsync(enabled); }
         catch (Exception ex) { ShowError(UserMessage(ex)); }
+        finally { ControlsPage.SetMasterBusy(false); Refresh(); }
+    }
+
+    private async void PcCommand_Changed(string id, bool enabled)
+    {
+        if (_session is null) return;
+        ControlsPage.SetCommandBusy(id, true);
+        try { await _session.SetPcCommandEnabledAsync(id, enabled); }
+        catch (Exception ex) { ShowError(UserMessage(ex)); }
+        finally { ControlsPage.SetCommandBusy(id, false); Refresh(); }
     }
 
     private void OpenLogs_Click(object sender, RoutedEventArgs e) => Process.Start(new ProcessStartInfo("explorer.exe", AppLog.DataDirectory) { UseShellExecute = true });

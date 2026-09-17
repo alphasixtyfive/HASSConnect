@@ -31,7 +31,6 @@ public sealed partial class NotificationSettingsView : UserControl
             MasterRow.IsOn = settings.NotificationsEnabled;
             SoundRow.IsOn = settings.NotificationSound;
         }
-        MasterRow.ValueText = settings.NotificationsEnabled ? "On" : "Off";
         StatusText.Text = !supported ? status : !registered ? "Connect to Home Assistant in Settings." :
             settings.NotificationsEnabled && (!connected || status != "Connected") ? status : "";
         StatusText.Visibility = string.IsNullOrWhiteSpace(StatusText.Text) ? Visibility.Collapsed : Visibility.Visible;

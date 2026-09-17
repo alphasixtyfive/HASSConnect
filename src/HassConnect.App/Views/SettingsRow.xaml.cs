@@ -8,6 +8,7 @@ public sealed partial class SettingsRow : UserControl
 {
     private bool _updating = true;
     private UIElement? _trailingContent;
+    private bool _showsToggleState;
 
     public SettingsRow()
     {
@@ -54,8 +55,22 @@ public sealed partial class SettingsRow : UserControl
         set
         {
             _updating = true;
-            try { Switch.IsOn = value; }
+            try
+            {
+                Switch.IsOn = value;
+                UpdateToggleState();
+            }
             finally { _updating = false; }
+        }
+    }
+
+    public bool ShowsToggleState
+    {
+        get => _showsToggleState;
+        set
+        {
+            _showsToggleState = value;
+            UpdateToggleState();
         }
     }
 
@@ -102,7 +117,13 @@ public sealed partial class SettingsRow : UserControl
 
     private void Switch_Toggled(object sender, RoutedEventArgs e)
     {
+        UpdateToggleState();
         if (!_updating)
             ToggleChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void UpdateToggleState()
+    {
+        if (_showsToggleState) ValueText = Switch.IsOn ? "On" : "Off";
     }
 }

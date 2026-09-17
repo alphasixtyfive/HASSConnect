@@ -70,6 +70,9 @@
           <RadioButton x:Name="NotificationsNav" Style="{StaticResource NavButton}" GroupName="Navigation" Tag="notifications" Click="Nav_Click" AutomationProperties.Name="Notifications page">
             <StackPanel Orientation="Horizontal" Spacing="10"><FontIcon Glyph="&#xE8F2;" FontSize="14" /><TextBlock Text="Notifications" /></StackPanel>
           </RadioButton>
+          <RadioButton x:Name="ControlsNav" Style="{StaticResource NavButton}" GroupName="Navigation" Tag="controls" Click="Nav_Click" AutomationProperties.Name="Controls page">
+            <StackPanel Orientation="Horizontal" Spacing="10"><FontIcon Glyph="&#xE945;" FontSize="14" /><TextBlock Text="Controls" /></StackPanel>
+          </RadioButton>
         </StackPanel>
         <RadioButton x:Name="SettingsNav" Grid.Row="2" Style="{StaticResource NavButton}" GroupName="Navigation" Tag="settings" Click="Nav_Click" Margin="7,2,7,10" AutomationProperties.Name="Settings page">
           <StackPanel Orientation="Horizontal" Spacing="10"><FontIcon Glyph="&#xE713;" FontSize="14" /><TextBlock Text="Settings" /></StackPanel>
@@ -84,6 +87,7 @@
           <InfoBar x:Name="ErrorBar" IsOpen="False" IsClosable="True" Severity="Error" />
           <views:SensorSettingsView x:Name="SensorsPage" />
           <views:NotificationSettingsView x:Name="NotificationsPage" Visibility="Collapsed" />
+          <views:ControlSettingsView x:Name="ControlsPage" Visibility="Collapsed" />
           <StackPanel x:Name="SettingsPage" Spacing="16" Visibility="Collapsed">
             <Border Style="{StaticResource Card}">
               <StackPanel Spacing="14">
@@ -102,6 +106,15 @@
                     <TextBlock Text="Server" VerticalAlignment="Center" />
                     <TextBox x:Name="ServerBox" Grid.Column="1" TextChanged="ConnectionField_Changed" PlaceholderText="https://home.example.com" AutomationProperties.Name="Home Assistant address" />
                     <TextBlock x:Name="ServerError" Grid.Row="1" Grid.Column="1" Style="{StaticResource FieldError}" AutomationProperties.LiveSetting="Polite" />
+                  </Grid>
+                  <Grid ColumnSpacing="16" MinHeight="32">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="110" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                    <TextBlock Text="Open dashboard" VerticalAlignment="Center" />
+                    <ComboBox x:Name="DashboardBox" Grid.Column="1" DisplayMemberPath="Title"
+                              HorizontalAlignment="Stretch" SelectionChanged="Dashboard_Changed" IsEnabled="False"
+                              AutomationProperties.Name="Dashboard opened from the tray" />
+                    <Button x:Name="RefreshDashboardsButton" Grid.Column="2" Content="Refresh" Click="RefreshDashboards_Click"
+                            IsEnabled="False" AutomationProperties.Name="Refresh Home Assistant dashboards" />
                   </Grid>
                   <Grid ColumnSpacing="16" MinHeight="32">
                     <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
@@ -149,7 +162,8 @@
                       <ComboBox x:Name="ThemeBox" Width="120" SelectionChanged="Theme_Changed" AutomationProperties.Name="Appearance"><x:String>System</x:String><x:String>Light</x:String><x:String>Dark</x:String></ComboBox>
                     </views:SettingsRow.TrailingContent>
                   </views:SettingsRow>
-                  <views:SettingsRow x:Name="StartupRow" Title="Start with Windows" Glyph="&#xE7E8;" ToggleChanged="Startup_Toggled" />
+                  <views:SettingsRow x:Name="StartupRow" Title="Start with Windows" Glyph="&#xE7E8;"
+                                     ShowsToggleState="True" ToggleChanged="Startup_Toggled" />
                   <views:SettingsRow Title="Diagnostic logs" Glyph="&#xE8A5;">
                     <views:SettingsRow.TrailingContent><Button Content="Open folder" Width="120" Click="OpenLogs_Click" AutomationProperties.Name="Open diagnostic log folder" /></views:SettingsRow.TrailingContent>
                   </views:SettingsRow>

@@ -1,0 +1,15 @@
+<UserControl x:Class="HassConnect.App.Views.ControlSettingsView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:HassConnect.App.Views">
+  <StackPanel Spacing="12">
+    <Border Background="{ThemeResource CardSurfaceBrush}" BorderBrush="{ThemeResource SectionBorderBrush}" BorderThickness="1" CornerRadius="8">
+      <local:SettingsRow x:Name="MasterRow" Title="Enable PC control" Glyph="&#xE7F4;"
+                         ShowsToggleState="True" ShowDivider="False" ToggleChanged="MasterRow_Changed"
+                         ToolTipService.ToolTip="Allow the selected Home Assistant commands to control this PC." />
+    </Border>
+    <TextBlock x:Name="StatusText" FontSize="12" TextWrapping="Wrap" Visibility="Collapsed"
+               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+    <StackPanel x:Name="ControlGroups" Spacing="16" />
+  </StackPanel>
+</UserControl>

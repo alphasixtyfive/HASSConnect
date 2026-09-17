@@ -11,6 +11,7 @@ public sealed record NotificationMessage(string? Title, string Message, string? 
     public JsonElement? ActionData { get; init; }
     public string NotificationId { get; init; } = Guid.NewGuid().ToString("N");
     public bool IsClear => Message == "clear_notification";
+    public PcCommand? Command { get; init; }
 
     public static NotificationMessage Parse(JsonElement payload)
     {
@@ -21,8 +22,10 @@ public sealed record NotificationMessage(string? Title, string Message, string? 
         string? image = null;
         string? tag = null;
         JsonElement? actionData = null;
+        JsonElement? commandData = null;
         if (payload.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.Object)
         {
+            commandData = data;
             tag = Text(data, "tag", int.MaxValue);
             if (tag?.Length > 256) throw new InvalidDataException("Notification tag exceeds 256 characters.");
             if (string.IsNullOrWhiteSpace(tag)) tag = null;
@@ -43,9 +46,11 @@ public sealed record NotificationMessage(string? Title, string Message, string? 
         }
         if (message == "clear_notification" && tag is null)
             throw new InvalidDataException("Clearing a notification requires a tag.");
-        return new(title, message, image, actions, Text(payload, "hass_confirm_id", 256))
-        { Tag = tag, ActionData = actionData };
+        return new(title, message, image, actions, ReadConfirmationId(payload))
+        { Tag = tag, ActionData = actionData, Command = PcCommand.Parse(message, commandData) };
     }
+
+    public static string? ReadConfirmationId(JsonElement payload) => Text(payload, "hass_confirm_id", 256);
 
     private static string? Text(JsonElement element, string property, int limit)
     {

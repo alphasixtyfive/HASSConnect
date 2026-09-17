@@ -1,7 +1,8 @@
+using System.Collections.Concurrent;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
-using System.Collections.Concurrent;
 using HassConnect.Core;
 using HassConnect.HomeAssistant;
 
@@ -20,14 +21,16 @@ internal sealed class NotificationService : IAsyncDisposable
     private bool _initialized;
     private readonly WindowsNotifications _windows;
     private readonly DesktopActivation _activation;
+    private readonly IPcCommandExecutor _pcCommands;
     private bool _disposed;
-    private readonly object _actionGate = new();
-    private readonly List<Task> _activationTasks = [];
+    private readonly object _taskGate = new();
+    private readonly List<Task> _backgroundTasks = [];
 
-    public NotificationService(WindowsNotifications windows, DesktopActivation activation)
+    public NotificationService(WindowsNotifications windows, DesktopActivation activation, IPcCommandExecutor pcCommands)
     {
         _windows = windows;
         _activation = activation;
+        _pcCommands = pcCommands;
         _activation.ActionInvoked += QueueAction;
     }
 
@@ -41,21 +44,26 @@ internal sealed class NotificationService : IAsyncDisposable
         await StopReceiverAsync();
         _settings = settings;
         _credentials = credentials;
-        if (!settings.NotificationsEnabled)
+        var receiverEnabled = settings.NotificationsEnabled || settings.PcControlEnabled;
+        if (!receiverEnabled)
         {
             SetStatus("Off", false);
+            await SetRemoteCapabilityAsync(settings, credentials, false, ct);
             return;
         }
-        if (!Supported)
+        if (settings.NotificationsEnabled && !Supported)
         {
             SetStatus("Windows notifications are unavailable on this PC", false);
             throw new InvalidOperationException("Windows notifications are unavailable on this PC.");
         }
-        try { await EnsureRegisteredAsync(); }
-        catch
+        if (settings.NotificationsEnabled)
         {
-            SetStatus("Windows notifications could not start", false);
-            throw;
+            try { await EnsureRegisteredAsync(); }
+            catch
+            {
+                SetStatus("Windows notifications could not start", false);
+                throw;
+            }
         }
         if (credentials?.WebhookId is null)
         {
@@ -63,20 +71,18 @@ internal sealed class NotificationService : IAsyncDisposable
             return;
         }
         ct.ThrowIfCancellationRequested();
+        await SetRemoteCapabilityAsync(settings, credentials, true, ct);
         _receiverStop = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
         _receiver = RunAsync(settings, credentials, _receiverStop.Token);
     }
 
     public void UpdateOptions(Settings settings) => _settings = settings;
 
-    public async Task DisableRemoteAsync(Settings settings, Credentials? credentials, CancellationToken ct)
+    public async Task DisableNotificationsAsync(Settings settings, Credentials? credentials, CancellationToken ct)
     {
         await ConfigureAsync(settings, credentials, ct);
         _actions.Clear();
         await _windows.ClearAsync();
-        if (credentials?.WebhookId is not { } webhook) return;
-        using var client = new HaClient(ServerAddress.Parse(settings.ServerUrl), credentials.AccessToken);
-        await client.SetNotificationCapabilityAsync(webhook, settings, false, ct);
     }
 
     public async Task TestAsync(Settings settings)
@@ -97,21 +103,15 @@ internal sealed class NotificationService : IAsyncDisposable
     private async Task RunAsync(Settings settings, Credentials credentials, CancellationToken ct)
     {
         var failures = 0;
-        bool advertised = false;
         while (!ct.IsCancellationRequested)
         {
             try
             {
                 SetStatus("Connecting…", false);
                 using var client = new HaClient(ServerAddress.Parse(settings.ServerUrl), credentials.AccessToken);
-                if (!advertised)
-                {
-                    await client.SetNotificationCapabilityAsync(credentials.WebhookId!, settings, true, ct);
-                    advertised = true;
-                }
                 await new NotificationChannel().ReceiveAsync(ServerAddress.Parse(settings.ServerUrl), credentials,
                     DeliverAsync, () => { failures = 0; SetStatus("Connected", true); },
-                    ex => { AppLog.Write("Notification delivery", ex.GetType().Name); SetStatus("Notification could not be displayed", true); }, ct);
+                    ex => AppLog.Write("Remote message", ex.GetType().Name), ct);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
             catch (UnauthorizedAccessException)
@@ -139,7 +139,20 @@ internal sealed class NotificationService : IAsyncDisposable
     {
         var settings = _settings;
         var credentials = _credentials;
-        if (!settings.NotificationsEnabled || credentials is null) return;
+        if (credentials is null) return;
+        if (message.Command is { } command)
+        {
+            if (settings.PcControlEnabled && settings.EnabledPcCommands.Contains(command.Id))
+            {
+                // Give Home Assistant time to receive its delivery confirmation before
+                // the network connection is suspended with the PC.
+                if (command.Kind == PcCommandKind.Sleep) QueueDeferredCommand(command);
+                else ExecutePcCommand(command);
+            }
+            else AppLog.Write("PC control", "Ignored while disabled");
+            return;
+        }
+        if (!settings.NotificationsEnabled) return;
         if (message.IsClear)
         {
             await _windows.ClearAsync(WindowsTag(message.Tag!));
@@ -196,12 +209,40 @@ internal sealed class NotificationService : IAsyncDisposable
         => _windows.Show(message, settings.NotificationSound, image, actions, message.Tag is null ? null : WindowsTag(message.Tag));
 
     private void QueueAction(string argument)
+        => QueueBackground(() => SendActionAsync(argument));
+
+    private void QueueDeferredCommand(PcCommand command)
+        => QueueBackground(() => ExecuteDeferredCommandAsync(command));
+
+    private void QueueBackground(Func<Task> operation)
     {
-        lock (_actionGate)
+        lock (_taskGate)
         {
             if (_disposed) return;
-            _activationTasks.RemoveAll(task => task.IsCompleted);
-            _activationTasks.Add(SendActionAsync(argument));
+            _backgroundTasks.RemoveAll(task => task.IsCompleted);
+            _backgroundTasks.Add(operation());
+        }
+    }
+
+    private async Task ExecuteDeferredCommandAsync(PcCommand command)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(1), _lifetime.Token);
+            ExecutePcCommand(command);
+        }
+        catch (OperationCanceledException) when (_disposed) { }
+    }
+
+    private void ExecutePcCommand(PcCommand command)
+    {
+        try { _pcCommands.Execute(command); }
+        catch (Exception exception)
+        {
+            var detail = exception is Win32Exception win32
+                ? $"Win32 error {win32.NativeErrorCode}"
+                : exception.GetType().Name;
+            AppLog.Write("PC control", detail);
         }
     }
 
@@ -246,6 +287,13 @@ internal sealed class NotificationService : IAsyncDisposable
         Connected = false;
     }
 
+    private static async Task SetRemoteCapabilityAsync(Settings settings, Credentials? credentials, bool enabled, CancellationToken ct)
+    {
+        if (credentials?.WebhookId is not { } webhook || string.IsNullOrWhiteSpace(settings.ServerUrl)) return;
+        using var client = new HaClient(ServerAddress.Parse(settings.ServerUrl), credentials.AccessToken);
+        await client.SetNotificationCapabilityAsync(webhook, settings, enabled, ct);
+    }
+
     private void SetStatus(string status, bool connected)
     {
         Status = status;
@@ -255,15 +303,15 @@ internal sealed class NotificationService : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        Task[] actions;
-        lock (_actionGate)
+        Task[] backgroundTasks;
+        lock (_taskGate)
         {
             _disposed = true;
             _activation.ActionInvoked -= QueueAction;
-            actions = _activationTasks.ToArray();
+            backgroundTasks = _backgroundTasks.ToArray();
         }
         await _lifetime.CancelAsync();
-        await Task.WhenAll(actions);
+        await Task.WhenAll(backgroundTasks);
         await StopReceiverAsync();
         try { await _windows.ClearAsync(); }
         catch (Exception ex) { AppLog.Write("Notification cleanup", ex.GetType().Name); }

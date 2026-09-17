@@ -11,6 +11,9 @@ public sealed class SettingsTests
         var settings = JsonSerializer.Deserialize<Settings>("""{"EnabledSensors":["uptime"]}""")!;
         Assert.True(settings.ShareSensors);
         Assert.Contains("uptime", settings.EnabledSensors);
+        Assert.Equal("", settings.HomeAssistantPath);
+        Assert.False(settings.PcControlEnabled);
+        Assert.Equal(PcCommandIds.All.Count, settings.EnabledPcCommands.Count);
     }
 
     [Fact]
@@ -20,5 +23,13 @@ public sealed class SettingsTests
         var restored = JsonSerializer.Deserialize<Settings>(JsonSerializer.Serialize(settings))!;
         Assert.False(restored.ShareSensors);
         Assert.True(settings.EnabledSensors.SetEquals(restored.EnabledSensors));
+    }
+
+    [Fact]
+    public void DashboardPathSurvivesReload()
+    {
+        var settings = new Settings { HomeAssistantPath = "/dashboard-cameras" };
+        var restored = JsonSerializer.Deserialize<Settings>(JsonSerializer.Serialize(settings))!;
+        Assert.Equal("/dashboard-cameras", restored.HomeAssistantPath);
     }
 }

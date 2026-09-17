@@ -42,6 +42,13 @@
         <Setter Property="FontSize" Value="13" />
         <Setter Property="TextWrapping" Value="Wrap" />
       </Style>
+      <ControlTemplate x:Key="SettingsGroupCard" TargetType="ContentControl">
+        <Border Background="{ThemeResource CardSurfaceBrush}"
+                BorderBrush="{ThemeResource SectionBorderBrush}"
+                BorderThickness="1" CornerRadius="8">
+          <ContentPresenter Content="{TemplateBinding Content}" HorizontalContentAlignment="Stretch" />
+        </Border>
+      </ControlTemplate>
     </ResourceDictionary>
   </Application.Resources>
 </Application>

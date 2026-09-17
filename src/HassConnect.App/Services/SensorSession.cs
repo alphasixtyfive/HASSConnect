@@ -15,7 +15,7 @@ internal sealed class SensorSession : IAsyncDisposable
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly CancellationTokenSource _lifetime = new();
     private readonly Task _loop;
-    private readonly Task _notificationStartup;
+    private readonly Task _messageReceiverStartup;
     private readonly NotificationService _notifications;
     private HaClient? _client;
     private Credentials? _credentials;
@@ -42,8 +42,8 @@ internal sealed class SensorSession : IAsyncDisposable
     public DateTimeOffset? LastReported { get; private set; }
     public bool Connected { get; private set; }
     public bool Paused => !_settings.ShareSensors;
-    public string NotificationStatus => _notifications.Status;
-    public bool NotificationsConnected => _notifications.Connected;
+    public string RemoteMessageStatus => _notifications.Status;
+    public bool RemoteMessagesConnected => _notifications.Connected;
     public bool NotificationsSupported => _notifications.Supported;
     public bool IsRegistered => _credentials?.WebhookId is not null;
     internal string? GetSavedAccessToken() => _credentials?.AccessToken;
@@ -61,7 +61,7 @@ internal sealed class SensorSession : IAsyncDisposable
             _client = new HaClient(ServerAddress.Parse(_settings.ServerUrl), _credentials.AccessToken);
         _notifications.Changed += () => Changed?.Invoke();
         _loop = RunAsync(_lifetime.Token);
-        _notificationStartup = StartNotificationsAsync(_lifetime.Token);
+        _messageReceiverStartup = StartMessageReceiverAsync(_lifetime.Token);
     }
 
     public async Task ConnectAsync(string url, string deviceName, string token)
@@ -167,6 +167,27 @@ internal sealed class SensorSession : IAsyncDisposable
         finally { _gate.Release(); }
     }
 
+    public async Task<IReadOnlyList<HomeAssistantDashboard>> GetDashboardsAsync()
+    {
+        await _gate.WaitAsync(_lifetime.Token);
+        try
+        {
+            if (_credentials is null || string.IsNullOrWhiteSpace(_settings.ServerUrl))
+                throw new InvalidOperationException("Connect to Home Assistant first.");
+            return await new DashboardCatalog().GetAsync(ServerAddress.Parse(_settings.ServerUrl),
+                _credentials.AccessToken, _lifetime.Token);
+        }
+        finally { _gate.Release(); }
+    }
+
+    public async Task SetHomeAssistantPathAsync(string? path)
+    {
+        var normalized = HomeAssistantNavigation.NormalizePath(path);
+        await _gate.WaitAsync(_lifetime.Token);
+        try { SaveSettings(_settings with { HomeAssistantPath = normalized }); }
+        finally { _gate.Release(); Changed?.Invoke(); }
+    }
+
     public async Task SetNotificationsEnabledAsync(bool enabled)
     {
         await _gate.WaitAsync(_lifetime.Token);
@@ -176,7 +197,7 @@ internal sealed class SensorSession : IAsyncDisposable
             if (enabled && !NotificationsSupported) throw new InvalidOperationException("Windows notifications are unavailable on this PC.");
             SaveSettings(_settings with { NotificationsEnabled = enabled });
             if (enabled) await _notifications.ConfigureAsync(_settings, _credentials, _lifetime.Token);
-            else await _notifications.DisableRemoteAsync(_settings, _credentials, _lifetime.Token);
+            else await _notifications.DisableNotificationsAsync(_settings, _credentials, _lifetime.Token);
         }
         finally { _gate.Release(); Changed?.Invoke(); }
     }
@@ -192,6 +213,33 @@ internal sealed class SensorSession : IAsyncDisposable
         finally { _gate.Release(); Changed?.Invoke(); }
     }
 
+    public async Task SetPcControlEnabledAsync(bool enabled)
+    {
+        await _gate.WaitAsync(_lifetime.Token);
+        try
+        {
+            if (enabled && !IsRegistered) throw new InvalidOperationException("Connect to Home Assistant first.");
+            SaveSettings(_settings with { PcControlEnabled = enabled });
+            await _notifications.ConfigureAsync(_settings, _credentials, _lifetime.Token);
+        }
+        finally { _gate.Release(); Changed?.Invoke(); }
+    }
+
+    public async Task SetPcCommandEnabledAsync(string id, bool enabled)
+    {
+        await _gate.WaitAsync(_lifetime.Token);
+        try
+        {
+            if (!PcCommandIds.IsKnown(id))
+                throw new ArgumentOutOfRangeException(nameof(id));
+            var commands = new HashSet<string>(_settings.EnabledPcCommands);
+            if (enabled) commands.Add(id); else commands.Remove(id);
+            SaveSettings(_settings with { EnabledPcCommands = commands });
+            _notifications.UpdateOptions(_settings);
+        }
+        finally { _gate.Release(); Changed?.Invoke(); }
+    }
+
     public async Task TestNotificationAsync()
     {
         await _gate.WaitAsync(_lifetime.Token);
@@ -199,7 +247,7 @@ internal sealed class SensorSession : IAsyncDisposable
         finally { _gate.Release(); }
     }
 
-    private async Task StartNotificationsAsync(CancellationToken ct)
+    private async Task StartMessageReceiverAsync(CancellationToken ct)
     {
         try
         {
@@ -351,7 +399,7 @@ internal sealed class SensorSession : IAsyncDisposable
     {
         await _lifetime.CancelAsync();
         try { await _loop; } catch (OperationCanceledException) { }
-        await _notificationStartup;
+        await _messageReceiverStartup;
         // UI actions share this gate with the polling loop. Wait for their
         // cancellation to finish before releasing the connection resources.
         await _gate.WaitAsync();
