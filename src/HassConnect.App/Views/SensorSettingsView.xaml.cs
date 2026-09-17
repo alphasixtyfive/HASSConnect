@@ -36,8 +36,7 @@ public sealed partial class SensorSettingsView : UserControl
             if (rows.Children.LastOrDefault() is SettingsRow last) last.ShowDivider = false;
             var section = new StackPanel { Spacing = 8 };
             section.Children.Add(new TextBlock { Text = group.Key, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
-            // Reuse the theme-aware card template rather than copying brushes into code.
-            var card = new ContentControl { Template = (ControlTemplate)Resources["SensorGroupCard"] };
+            var card = new ContentControl { Template = (ControlTemplate)Application.Current.Resources["SettingsGroupCard"] };
             card.Content = rows;
             section.Children.Add(card);
             SensorGroups.Children.Add(section);
@@ -48,7 +47,6 @@ public sealed partial class SensorSettingsView : UserControl
     {
         _sharingEnabled = settings.ShareSensors;
         MasterRow.IsOn = _sharingEnabled;
-        MasterRow.ValueText = _sharingEnabled ? "On" : "Off";
         foreach (var sensor in SensorDefinition.Available)
         {
             var row = _rows[sensor.Id];
@@ -56,7 +54,7 @@ public sealed partial class SensorSettingsView : UserControl
             bool enabled = settings.EnabledSensors.Contains(sensor.Id);
             if (!_busy.Contains(sensor.Id)) row.IsOn = enabled;
             row.Opacity = !_sharingEnabled || !supported ? 0.55 : 1;
-            row.ValueText = !supported ? "No battery" : !_sharingEnabled ? "Disabled" : !enabled ? "Off" :
+            row.ValueText = !supported ? "Not available on this PC" : !_sharingEnabled ? "Disabled" : !enabled ? "Off" :
                 values.TryGetValue(sensor.Id, out var value) ? FormatValue(sensor, value) : "Waiting…";
         }
         RefreshEnabledState();
@@ -93,6 +91,10 @@ public sealed partial class SensorSettingsView : UserControl
         "display_state" => "\uE7F4",
         "last_seen" => "\uE73E",
         "battery_level" => "\uE850",
+        "battery_charging" => "\uE83E",
+        "microphone_in_use" => "\uE720",
+        "webcam_in_use" => "\uE8B8",
+        "disk_usage" or "disk_free_space" => "\uEDA2",
         "ip_address" => "\uE774",
         "network_adapter" => "\uE839",
         "download_speed" => "\uE896",
@@ -108,9 +110,10 @@ public sealed partial class SensorSettingsView : UserControl
         if (sensor.Id == "display_state" && value is string display)
             return display switch { "on" => "On", "off" => "Off", "dimmed" => "Dimmed", _ => "Waiting…" };
         if (value is string text) return text == "unknown" ? sensor.Id == "cpu_usage" ? "Sampling…" : "Unavailable" : text;
-        if (value is bool locked) return locked ? "Locked" : "Unlocked";
+        if (value is bool state) return state ? sensor.OnText ?? "On" : sensor.OffText ?? "Off";
         if (sensor.Unit == "%") return $"{Convert.ToDouble(value):0.#}%";
         if (sensor.Unit == "Mbit/s") return $"{Convert.ToDouble(value):0.00} Mbit/s";
+        if (sensor.Unit == "GB") return $"{Convert.ToDouble(value):0.0} GB";
         var duration = TimeSpan.FromSeconds(Convert.ToDouble(value));
         return duration.TotalDays >= 1 ? $"{(int)duration.TotalDays}d {duration.Hours}h {duration.Minutes}m" :
             duration.TotalHours >= 1 ? $"{duration.Hours}h {duration.Minutes}m" :

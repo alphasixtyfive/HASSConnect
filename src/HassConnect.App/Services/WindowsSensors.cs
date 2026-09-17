@@ -12,7 +12,7 @@ internal static class WindowsSensors
     private static object _cpuUsage = "unknown";
 
     public static IReadOnlyList<SensorDefinition> Available { get; } = SensorDefinition.Available
-        .Where(sensor => sensor.Id != "battery_level" || HasBattery()).ToArray();
+        .Where(sensor => PowerSensors.IsSupported(sensor.Id)).ToArray();
 
     public static SensorReading Read(string id) => id switch
     {
@@ -21,7 +21,9 @@ internal static class WindowsSensors
         "cpu_usage" => new(id, CpuUsage()),
         "memory_usage" => new(id, MemoryUsage()),
         "session_locked" => new(id, SessionLocked()),
-        "battery_level" => new(id, BatteryLevel()),
+        "battery_level" or "battery_charging" => new(id, PowerSensors.Read(id)),
+        "disk_usage" or "disk_free_space" => new(id, StorageSensors.Read(id)),
+        "microphone_in_use" or "webcam_in_use" => new(id, DeviceActivitySensors.Read(id)),
         "ip_address" or "network_adapter" or "download_speed" or "upload_speed" => new(id, NetworkSensors.Read(id)),
         _ => throw new ArgumentOutOfRangeException(nameof(id))
     };
@@ -85,16 +87,6 @@ internal static class WindowsSensors
         finally { WTSFreeMemory(buffer); }
     }
 
-    private static bool HasBattery() => GetSystemPowerStatus(out var power) &&
-        power.BatteryFlag != 255 && (power.BatteryFlag & 128) == 0;
-
-    private static object BatteryLevel()
-    {
-        if (!GetSystemPowerStatus(out var power)) throw new Win32Exception(Marshal.GetLastWin32Error());
-        return power.BatteryFlag != 255 && (power.BatteryFlag & 128) == 0 && power.BatteryPercent <= 100
-            ? power.BatteryPercent : "unknown";
-    }
-
     private static long IdleSeconds()
     {
         var info = new LastInputInfo { Size = (uint)Marshal.SizeOf<LastInputInfo>() };
@@ -123,13 +115,6 @@ internal static class WindowsSensors
         [FieldOffset(16)] public int Flags;
     }
 
-    [StructLayout(LayoutKind.Sequential)]
-    private struct PowerStatus
-    {
-        public byte AcLineStatus, BatteryFlag, BatteryPercent, SystemStatusFlag;
-        public uint BatteryLifeTime, BatteryFullLifeTime;
-    }
-
     [DllImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetSystemTimes(out ulong idle, out ulong kernel, out ulong user);
@@ -137,10 +122,6 @@ internal static class WindowsSensors
     [DllImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GlobalMemoryStatusEx(ref MemoryStatus memory);
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool GetSystemPowerStatus(out PowerStatus power);
 
     [DllImport("wtsapi32.dll", EntryPoint = "WTSQuerySessionInformationW", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
