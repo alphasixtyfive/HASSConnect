@@ -11,6 +11,8 @@ The current release version lives in `Directory.Build.props`.
 - Verify a notification with a snapshot and two buttons. Check the returned HA event, replacement by tag and clearing.
 - Test an upgrade and uninstall. Preserve settings and encrypted credentials; remove shortcuts, startup entries and notification registration owned by the app.
 - Check the release archive for credentials, signing keys, test photos, diagnostic logs and development output.
+- Run the [product screenshot quality gate](screenshots.md). Publish only native-resolution,
+  lossless PNG captures; desktop-control preview images and re-encoded JPEGs fail the gate.
 
 ## Publish
 

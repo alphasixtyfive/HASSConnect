@@ -41,27 +41,6 @@ unknown-publisher warning.
 In Home Assistant, open your profile and select **Security** to create a long-lived access token.
 Closing the window keeps the app in the tray. The tray menu also opens Home Assistant in your browser. Choose **Quit** to stop the app.
 
-## Screenshots
-
-<table>
-  <tr>
-    <td><a href="docs/images/sensors.jpg"><img src="docs/images/sensors.jpg" width="390" alt="HASS Connect Sensors page"></a></td>
-    <td><a href="docs/images/notifications.jpg"><img src="docs/images/notifications.jpg" width="390" alt="HASS Connect Notifications page"></a></td>
-  </tr>
-  <tr>
-    <td align="center"><strong>Sensors</strong></td>
-    <td align="center"><strong>Windows notifications</strong></td>
-  </tr>
-  <tr>
-    <td><a href="docs/images/controls.jpg"><img src="docs/images/controls.jpg" width="390" alt="HASS Connect Controls page with custom commands"></a></td>
-    <td><a href="docs/images/custom-command-editor.jpg"><img src="docs/images/custom-command-editor.jpg" width="390" alt="HASS Connect custom-command editor"></a></td>
-  </tr>
-  <tr>
-    <td align="center"><strong>PC controls</strong></td>
-    <td align="center"><strong>Trusted custom commands</strong></td>
-  </tr>
-</table>
-
 ## Sensors
 
 All sensors are off by default. Enabled sensors report every 15 seconds.

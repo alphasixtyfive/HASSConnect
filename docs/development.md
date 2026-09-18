@@ -65,3 +65,6 @@ is required. Installer signing is a separate distribution concern.
 See [packaging](../packaging/README.md) for installer builds and deployment requirements.
 
 Use the [release checklist](releasing.md) before publishing a version.
+
+Follow the [product screenshot standard](screenshots.md) for every README, guide, and
+release image. Automation preview JPEGs are not acceptable source assets.

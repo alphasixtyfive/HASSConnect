@@ -1,7 +1,5 @@
 # Sensors
 
-<img src="images/sensors.jpg" width="720" alt="HASS Connect Sensors page">
-
 Sensors are individually opt-in. Enable sensors pauses collection while preserving
 individual choices. Reports normally run every 15 seconds while awake and connected.
 
