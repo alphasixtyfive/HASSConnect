@@ -83,8 +83,9 @@ internal sealed class HaWebSocket : IAsyncDisposable
     {
         if (_socket.State is WebSocketState.Open or WebSocketState.CloseReceived)
         {
-            try { await _socket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, null, CancellationToken.None); }
-            catch (WebSocketException) { }
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+            try { await _socket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, null, timeout.Token); }
+            catch (Exception exception) when (exception is WebSocketException or OperationCanceledException) { }
         }
         _socket.Dispose();
     }
