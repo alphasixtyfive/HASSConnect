@@ -49,17 +49,8 @@ buttons for every command and uses confirmation prompts for disruptive actions.
 
 ## Custom commands
 
-Custom commands cover device-specific actions without turning incoming Home Assistant
-messages into a remote shell. In **Controls > Custom commands**, select **Add**
-and configure:
-
-- A display name used only in HASS Connect.
-- A stable command name beginning with `command_custom_`, followed by lowercase
-  letters, numbers or underscores. Command names cannot be changed after creation.
-- An absolute path to a local `.exe` file.
-- Up to 16 fixed arguments, one per line. A line containing spaces remains one argument.
-
-For example, a command named `command_custom_open_music` is triggered with:
+You can also approve a local program and give it a command name. For example, a saved
+command named `command_custom_open_music` is triggered with:
 
 ```yaml
 action: notify.mobile_app_your_pc
@@ -67,14 +58,9 @@ data:
   message: command_custom_open_music
 ```
 
-The executable and arguments are stored locally. Data attached to the Home Assistant
-message cannot replace or add arguments. To run a script, explicitly select its trusted
-interpreter as the executable and put the script path and other fixed values in the
-argument list. Avoid interpreters or scripts that evaluate untrusted files or network
-content.
-
-See the [custom-command guide](custom-commands.md) for setup examples, validation rules,
-testing, editing, deletion and troubleshooting.
+The program and its arguments stay on the PC; the Home Assistant message cannot replace
+them. The [custom-command guide](custom-commands.md) walks through setup, testing and
+troubleshooting.
 
 ## Safety and failure handling
 

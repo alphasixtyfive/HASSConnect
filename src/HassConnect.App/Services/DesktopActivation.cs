@@ -46,10 +46,11 @@ internal sealed class DesktopActivation : IDisposable
                 try
                 {
                     using var process = System.Diagnostics.Process.GetProcessById((int)instance.ProcessId);
-                    using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+                    using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                     await process.WaitForExitAsync(timeout.Token);
                 }
                 catch (ArgumentException) { }
+                catch (OperationCanceledException) { }
             }
             return false;
         }

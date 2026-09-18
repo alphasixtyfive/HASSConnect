@@ -5,7 +5,7 @@
 <h1 align="center">HASS Connect</h1>
 
 <p align="center">
-  PC sensors and native Windows notifications for <a href="https://www.home-assistant.io/">Home Assistant</a>.
+  Connect your Windows PC to <a href="https://www.home-assistant.io/">Home Assistant</a>.
 </p>
 
 <p align="center">
@@ -20,16 +20,19 @@
   <a href="https://github.com/alphasixtyfive/HASSConnect/issues">Report an issue</a>
 </p>
 
-Choose which sensors your PC reports and receive alerts with snapshots and action buttons.
-HASS Connect runs in the tray and uses Home Assistant’s
+Report useful PC status, show Home Assistant notifications in Windows, and run the PC
+actions you choose. HASS Connect stays in the tray and uses Home Assistant’s
 [Mobile App integration](https://www.home-assistant.io/integrations/mobile_app/).
 No MQTT broker or custom integration is required.
 
 ## Getting started
 
-For Windows 11 x64. Download the installer from the [latest release](https://github.com/alphasixtyfive/HASSConnect/releases/latest).
+HASS Connect supports Windows 11 x64. Download Setup from the
+[latest release](https://github.com/alphasixtyfive/HASSConnect/releases/latest).
 
-Setup downloads the required Microsoft runtimes, so an internet connection is needed. The installer is currently unsigned, so Windows may show an unknown-publisher warning. Notifications do not require importing a certificate.
+Setup downloads the Microsoft runtimes it needs, so the first installation requires an
+internet connection. The installer is currently unsigned, and Windows may show an
+unknown-publisher warning.
 
 1. Run the installer, then open **HASS Connect** from Start.
 2. Open **Settings**, enter your Home Assistant address and a long-lived access token, then connect.
@@ -98,15 +101,12 @@ The app must be running and connected. Windows Do not disturb can suppress banne
 
 ## Controls
 
-The **Controls** page can opt this PC into built-in commands for lock, display sleep,
-system sleep, media playback, mute and volume level. It can also run locally approved custom
-executables with fixed arguments. PC control is off by default, and every command can be
-disabled independently. See the [PC command reference](docs/commands.md) and
-[custom-command guide](docs/custom-commands.md).
+PC control is off until you enable it. The built-in commands can lock the PC, turn off its
+displays, put it to sleep, and control media or volume. Each command has its own switch.
 
-<img src="docs/images/controls-custom-commands.jpg" width="788" alt="HASS Connect Controls page with custom commands">
-
-*Screenshot shows example custom commands.*
+For anything else, create a custom command by choosing the exact `.exe` and fixed arguments
+on the PC. Home Assistant can trigger the saved command but cannot change what it runs. See
+the [PC command reference](docs/commands.md) and [custom-command guide](docs/custom-commands.md).
 
 ## Privacy and updates
 

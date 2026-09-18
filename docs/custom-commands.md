@@ -1,36 +1,33 @@
 # Custom commands
 
-Custom commands let Home Assistant start a program that you explicitly approve on the
-Windows PC. Each command stores one local executable and a fixed list of arguments. An
-incoming Home Assistant message can select the command, but it cannot change the program
-or add arguments.
+Custom commands are for the PC actions that HASS Connect does not include out of the box.
+You choose a program and, if needed, a fixed set of launch options. Home Assistant can run
+that saved command, but it cannot change the program or its options.
 
 ## Add a command
 
 1. Open **Controls** and enable **PC control**.
 2. Under **Custom commands**, select **Add**.
-3. Enter a display name, Home Assistant command, local program and any fixed launch options.
-4. Select **Test command** and confirm that the program behaves as expected.
-5. Select **Add**, then leave the command's switch enabled.
+3. Give it a friendly name and a Home Assistant command name.
+4. Choose the program. Add fixed launch options only if the program needs them.
+5. Select **Test command** and check that the right thing happens.
+6. Select **Add**. Leave its switch on when you want Home Assistant to use it.
 
 Use the gear button beside an existing command to edit or delete it. The switch controls
-whether Home Assistant may run that command without removing its configuration.
+whether Home Assistant may run that command without removing it.
 
-<img src="images/custom-command-editor.jpg" width="788" alt="HASS Connect custom command editor">
+## What to enter
 
-### Fields and limits
+- **Display name** is the label shown in HASS Connect.
+- **Home Assistant command** starts with `command_custom_`. After that, use a lowercase
+  letter followed by lowercase letters, numbers or underscores. It cannot be renamed later.
+- **Program** is the full path to a local `.exe`. Use **Browse** instead of typing the path
+  when possible.
+- **Launch options** are optional and fixed. Enter one argument per line; a line containing
+  spaces is still passed as one argument.
 
-- **Display name:** 1–60 printable characters, used only inside HASS Connect.
-- **Home Assistant command:** `command_custom_` followed by a lowercase letter and up to
-  31 additional lowercase letters, numbers or underscores. It cannot be renamed after the
-  command is created.
-- **Program:** an existing absolute path to a local `.exe` file. Relative paths, network
-  paths, symbolic links, reparse points and other file types are rejected.
-- **Launch options:** zero to 16 fixed arguments, one per line. A line containing spaces is
-  passed as one argument. Each argument can contain up to 512 printable characters, with a
-  combined limit of 4,096 characters.
-
-Up to 20 custom commands can be configured.
+HASS Connect accepts up to 20 commands and 16 launch options per command. It rejects
+missing programs, network paths, shortcuts and symbolic links.
 
 ## Trigger it from Home Assistant
 
@@ -43,13 +40,13 @@ data:
   message: command_custom_open_notepad
 ```
 
-No additional `data` is required or accepted by the custom command. Fixed arguments remain
-on the PC and cannot be overridden remotely.
+That is the complete Home Assistant action. Do not add a program path or arguments to the
+notification: HASS Connect ignores them and uses the values saved on the PC.
 
 ## Useful examples
 
-These examples use executables included with Windows. Confirm the path on the target PC
-before saving.
+These examples use programs included with Windows. Confirm the path on your PC before
+saving.
 
 | Use | Program | Fixed launch options |
 | --- | --- | --- |
@@ -57,29 +54,25 @@ before saving.
 | Open Calculator | `C:\Windows\System32\calc.exe` | None |
 | Open a folder | `C:\Windows\explorer.exe` | The absolute folder path |
 
-For a third-party application, use **Browse** to select its installed `.exe`. To run a
-script, select a trusted interpreter as the program and store the script path as a fixed
-argument. Do not configure interpreters or scripts that evaluate remote or user-controlled
-content.
+For another application, use **Browse** and choose its installed `.exe`.
 
-## Security model
+## What keeps it controlled
 
-- Commands are opt-in at three levels: PC control, the saved command, and its individual
-  switch.
-- The selected executable is validated when saved, tested and executed.
-- HASS Connect starts the executable directly without a command shell or elevation. It runs
-  as the signed-in Windows account.
-- Home Assistant cannot supply executable paths or arguments.
-- A command can start at most once every five seconds. All custom commands together can
-  start at most ten times per minute.
-- Unknown or disabled commands do not execute and are recorded in the diagnostic log.
+- Nothing runs until PC control and that command's switch are both enabled.
+- HASS Connect checks the program when you save, test and run the command.
+- The program starts directly as your Windows account—without a command shell or
+  administrator elevation.
+- Home Assistant cannot send a different program or extra arguments.
+- Repeated triggers are rate-limited: once every five seconds for one command and ten
+  starts per minute across all custom commands.
+- Unknown and disabled commands do not run.
 
 Deleting a command immediately stops its Home Assistant message from working. Deletion
 requires confirmation.
 
 ## Troubleshooting
 
-- Confirm HASS Connect is running, connected, and **PC control** is enabled.
+- Confirm HASS Connect is running, connected and **PC control** is enabled.
 - Confirm the command's switch is enabled and the notification message matches exactly.
 - Use **Test command** to separate local launch problems from Home Assistant automation
   problems.

@@ -4,7 +4,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <AnalysisLevel>latest</AnalysisLevel>
-    <Version>0.4.1</Version>
+    <Version>0.4.2</Version>
     <Deterministic>true</Deterministic>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)' == 'Release'">
