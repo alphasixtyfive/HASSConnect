@@ -1,4 +1,6 @@
 using System.Net;
+using System.Security.Cryptography;
+using System.Text;
 using HassConnect.Updates;
 
 namespace HassConnect.Tests;
@@ -63,6 +65,113 @@ public sealed class UpdateCheckerTests
             return new(HttpStatusCode.NotFound);
         }));
         await new UpdateChecker(client).CheckAsync("example/app", "1.2.3");
+    }
+
+    [Fact]
+    public async Task FindsExactTrustedInstallerAssets()
+    {
+        const string payload = """
+            {
+              "draft": false,
+              "prerelease": false,
+              "tag_name": "v1.3.0",
+              "assets": [
+                { "name": "HASSConnect-1.3.0-Setup-x64.exe", "size": 1234, "browser_download_url": "https://github.com/example/app/releases/download/v1.3.0/HASSConnect-1.3.0-Setup-x64.exe" },
+                { "name": "SHA256SUMS.txt", "size": 100, "browser_download_url": "https://github.com/example/app/releases/download/v1.3.0/SHA256SUMS.txt" }
+              ]
+            }
+            """;
+        using var client = new HttpClient(new Handler(_ => new(HttpStatusCode.OK)
+        {
+            Content = new StringContent(payload)
+        }));
+
+        var result = await new UpdateChecker(client).CheckAsync("example/app", "1.2.3");
+
+        Assert.Equal(UpdateState.Available, result.State);
+        Assert.NotNull(result.Package);
+        Assert.Equal("1.3.0", result.Package.Version);
+        Assert.Equal(1234, result.Package.Size);
+    }
+
+    [Fact]
+    public async Task RejectsInstallerAssetsOutsideTheConfiguredRepository()
+    {
+        const string payload = """
+            {
+              "draft": false,
+              "prerelease": false,
+              "tag_name": "v1.3.0",
+              "assets": [
+                { "name": "HASSConnect-1.3.0-Setup-x64.exe", "size": 1234, "browser_download_url": "https://attacker.example/setup.exe" },
+                { "name": "SHA256SUMS.txt", "size": 100, "browser_download_url": "https://github.com/example/app/releases/download/v1.3.0/SHA256SUMS.txt" }
+              ]
+            }
+            """;
+        using var client = new HttpClient(new Handler(_ => new(HttpStatusCode.OK)
+        {
+            Content = new StringContent(payload)
+        }));
+
+        var result = await new UpdateChecker(client).CheckAsync("example/app", "1.2.3");
+
+        Assert.Equal(UpdateState.Available, result.State);
+        Assert.Null(result.Package);
+        Assert.Contains("installer is missing", result.Message);
+    }
+
+    [Fact]
+    public async Task DownloadsAndVerifiesInstaller()
+    {
+        var bytes = Encoding.UTF8.GetBytes("verified installer content");
+        var hash = Convert.ToHexString(SHA256.HashData(bytes));
+        var package = new UpdatePackage(
+            "1.3.0",
+            new("https://github.com/example/app/releases/download/v1.3.0/HASSConnect-1.3.0-Setup-x64.exe"),
+            new("https://github.com/example/app/releases/download/v1.3.0/SHA256SUMS.txt"),
+            bytes.Length);
+        using var client = new HttpClient(new Handler(request => request.RequestUri!.AbsolutePath.EndsWith("SHA256SUMS.txt")
+            ? new(HttpStatusCode.OK) { Content = new StringContent($"{hash}  HASSConnect-1.3.0-Setup-x64.exe\n") }
+            : new(HttpStatusCode.OK) { Content = new ByteArrayContent(bytes) }));
+        var directory = Path.Combine(Path.GetTempPath(), $"hass-connect-update-test-{Guid.NewGuid():N}");
+        try
+        {
+            var result = await new UpdateInstaller(client).DownloadAsync(package, "example/app", directory);
+
+            Assert.Equal(hash, result.Sha256);
+            Assert.Equal(bytes, await File.ReadAllBytesAsync(result.InstallerPath));
+            Assert.False(File.Exists(result.InstallerPath + ".download"));
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, true);
+        }
+    }
+
+    [Fact]
+    public async Task DeletesPartialFileWhenChecksumDoesNotMatch()
+    {
+        var bytes = Encoding.UTF8.GetBytes("tampered installer content");
+        var package = new UpdatePackage(
+            "1.3.0",
+            new("https://github.com/example/app/releases/download/v1.3.0/HASSConnect-1.3.0-Setup-x64.exe"),
+            new("https://github.com/example/app/releases/download/v1.3.0/SHA256SUMS.txt"),
+            bytes.Length);
+        using var client = new HttpClient(new Handler(request => request.RequestUri!.AbsolutePath.EndsWith("SHA256SUMS.txt")
+            ? new(HttpStatusCode.OK) { Content = new StringContent($"{new string('0', 64)}  HASSConnect-1.3.0-Setup-x64.exe\n") }
+            : new(HttpStatusCode.OK) { Content = new ByteArrayContent(bytes) }));
+        var directory = Path.Combine(Path.GetTempPath(), $"hass-connect-update-test-{Guid.NewGuid():N}");
+        try
+        {
+            await Assert.ThrowsAsync<InvalidDataException>(() =>
+                new UpdateInstaller(client).DownloadAsync(package, "example/app", directory));
+
+            Assert.Empty(Directory.EnumerateFiles(directory));
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, true);
+        }
     }
 
     [Theory]

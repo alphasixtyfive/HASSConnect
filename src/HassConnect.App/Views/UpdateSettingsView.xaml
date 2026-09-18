@@ -5,18 +5,20 @@
         <TextBlock Text="Updates" FontSize="14" FontWeight="SemiBold" Margin="8,0,0,0" />
         <Border Background="{ThemeResource CardSurfaceBrush}" BorderBrush="{ThemeResource SectionBorderBrush}"
                 BorderThickness="1" CornerRadius="8" Padding="16,12">
-            <StackPanel Spacing="12">
+            <StackPanel Spacing="10">
                 <Grid ColumnSpacing="12">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="120" /></Grid.ColumnDefinitions>
                     <StackPanel Spacing="4" VerticalAlignment="Center">
                         <TextBlock x:Name="InstalledVersion" FontWeight="SemiBold" FontSize="14" />
-                        <TextBlock x:Name="UpdateStatus" Text="Check for a newer release." FontSize="12"
+                        <TextBlock x:Name="UpdateStatus" Text="Checking for updates…" FontSize="12"
                                    TextTrimming="CharacterEllipsis" AutomationProperties.LiveSetting="Polite"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                     </StackPanel>
                     <Button x:Name="UpdateButton" Grid.Column="1" Width="120" Content="Check updates"
-                            VerticalAlignment="Center" Click="Update_Click" />
+                            VerticalAlignment="Center" IsEnabled="False" Click="Update_Click" />
                 </Grid>
+                <ProgressBar x:Name="DownloadProgress" Visibility="Collapsed" IsIndeterminate="True"
+                             AutomationProperties.Name="Update download progress" />
             </StackPanel>
         </Border>
     </StackPanel>

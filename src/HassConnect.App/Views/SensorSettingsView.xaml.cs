@@ -46,7 +46,7 @@ public sealed partial class SensorSettingsView : UserControl
     public void Update(Settings settings, IReadOnlyDictionary<string, object?> values)
     {
         _sharingEnabled = settings.ShareSensors;
-        MasterRow.IsOn = _sharingEnabled;
+        if (!_masterBusy) MasterRow.IsOn = _sharingEnabled;
         foreach (var sensor in SensorDefinition.Available)
         {
             var row = _rows[sensor.Id];

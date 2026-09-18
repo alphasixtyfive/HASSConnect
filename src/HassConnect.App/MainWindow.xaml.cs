@@ -60,6 +60,8 @@ public sealed partial class MainWindow : Window
             NotificationsPage.TestRequested += TestNotification_Requested;
             ControlsPage.EnabledChanged += PcControl_Changed;
             ControlsPage.CommandChanged += PcCommand_Changed;
+            UpdatesPage.AvailabilityChanged += available =>
+                SettingsUpdateBadge.Visibility = available ? Visibility.Visible : Visibility.Collapsed;
             Refresh();
         }
         catch (Exception ex)

@@ -75,7 +75,14 @@
           </RadioButton>
         </StackPanel>
         <RadioButton x:Name="SettingsNav" Grid.Row="2" Style="{StaticResource NavButton}" GroupName="Navigation" Tag="settings" Click="Nav_Click" Margin="7,2,7,10" AutomationProperties.Name="Settings page">
-          <StackPanel Orientation="Horizontal" Spacing="10"><FontIcon Glyph="&#xE713;" FontSize="14" /><TextBlock Text="Settings" /></StackPanel>
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <FontIcon Glyph="&#xE713;" FontSize="14" />
+            <TextBlock Text="Settings" />
+            <Border x:Name="SettingsUpdateBadge" Visibility="Collapsed" CornerRadius="8" Padding="6,1"
+                    Background="{ThemeResource AccentFillColorDefaultBrush}" ToolTipService.ToolTip="HASS Connect update available">
+              <TextBlock Text="Update" FontSize="10" Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}" />
+            </Border>
+          </StackPanel>
         </RadioButton>
       </Grid>
     </Border>
@@ -173,7 +180,7 @@
                 </StackPanel>
               </Border>
             </StackPanel>
-            <views:UpdateSettingsView />
+            <views:UpdateSettingsView x:Name="UpdatesPage" />
           </StackPanel>
         </StackPanel>
       </ScrollViewer>

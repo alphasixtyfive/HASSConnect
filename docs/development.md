@@ -22,7 +22,7 @@ The app uses shared .NET and Windows App SDK runtimes. Setup installs these depe
 
 - `HassConnect.Core`: settings, sensor definitions, sampling calculations, reconciliation and address validation; no Windows or network dependencies.
 - `HassConnect.HomeAssistant`: HTTP and WebSocket protocols, independent of the UI and sensor collection.
-- `HassConnect.Updates`: manual stable-release checks against GitHub, independent of Windows and Home Assistant.
+- `HassConnect.Updates`: stable-release discovery plus verified installer downloads from GitHub, independent of Windows and Home Assistant.
 - `HassConnect.App`: native WinUI settings, tray lifecycle, Windows sensor readers, encrypted storage and the reporting session.
 - `HassConnect.Tests`: protocol, validation, reconciliation and CPU calculation tests with an in-memory HTTP handler.
 
@@ -40,9 +40,10 @@ To add a sensor, define its stable identity and metadata in Core, implement its 
 `Directory.Build.props` supplies the version for all application assemblies and HA
 registration.
 
-The Updates section in Settings shows the installed application version. Update checks read the latest stable GitHub release
-on request. New releases open in the browser; updates are not installed silently.
-Publish a stable release tagged `vX.Y.Z` to make it available to the checker.
+The Updates section checks the latest stable GitHub release automatically when the app starts. A newer release can be
+downloaded and installed from the app after explicit confirmation. Downloads are accepted only from the configured
+repository and only when `SHA256SUMS.txt` verifies the exact `HASSConnect-X.Y.Z-Setup-x64.exe` asset. If a release is
+missing either asset, the app falls back to its release page. Publish a stable release tagged `vX.Y.Z` to make it available.
 
 ## Windows notifications
 

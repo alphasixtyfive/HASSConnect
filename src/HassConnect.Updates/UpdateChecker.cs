@@ -6,7 +6,12 @@ using HassConnect.Core;
 namespace HassConnect.Updates;
 
 public enum UpdateState { NotConfigured, Current, Available, Unavailable }
-public sealed record UpdateResult(UpdateState State, string Message, Uri? ReleasePage = null);
+public sealed record UpdatePackage(string Version, Uri InstallerDownload, Uri ChecksumDownload, long? Size);
+public sealed record UpdateResult(
+    UpdateState State,
+    string Message,
+    Uri? ReleasePage = null,
+    UpdatePackage? Package = null);
 
 /// <summary>Checks published stable GitHub releases without downloading or executing installers.</summary>
 public sealed class UpdateChecker(HttpClient client)
@@ -42,10 +47,16 @@ public sealed class UpdateChecker(HttpClient client)
             var tag = release.GetProperty("tag_name").GetString();
             if (!ReleaseVersion.TryParseTag(tag, out var latest))
                 return new(UpdateState.Unavailable, "The release version isn’t recognized.");
-            return latest > current
-                ? new(UpdateState.Available, $"Version {latest.ToString(3)} is available.",
-                    new Uri($"https://github.com/{repository}/releases/tag/{Uri.EscapeDataString(tag!)}"))
-                : new(UpdateState.Current, "You’re up to date.");
+            if (latest <= current)
+                return new(UpdateState.Current, "You’re up to date.");
+
+            var version = latest.ToString(3);
+            var releasePage = new Uri($"https://github.com/{repository}/releases/tag/{Uri.EscapeDataString(tag!)}");
+            var package = FindPackage(release, repository, tag!, version);
+            return package is null
+                ? new(UpdateState.Available,
+                    $"Version {version} is available, but its Windows installer is missing.", releasePage)
+                : new(UpdateState.Available, $"Version {version} is available.", releasePage, package);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -55,6 +66,57 @@ public sealed class UpdateChecker(HttpClient client)
         {
             return new(UpdateState.Unavailable, "Couldn’t check for updates. Try again.");
         }
+    }
+
+    private static UpdatePackage? FindPackage(JsonElement release, string repository, string tag, string version)
+    {
+        if (!release.TryGetProperty("assets", out var assets) || assets.ValueKind != JsonValueKind.Array)
+            return null;
+
+        var installerName = $"HASSConnect-{version}-Setup-x64.exe";
+        const string checksumName = "SHA256SUMS.txt";
+        Uri? installer = null;
+        Uri? checksum = null;
+        long? size = null;
+        foreach (var asset in assets.EnumerateArray())
+        {
+            if (asset.ValueKind != JsonValueKind.Object ||
+                !asset.TryGetProperty("name", out var nameElement) ||
+                nameElement.ValueKind != JsonValueKind.String ||
+                !asset.TryGetProperty("browser_download_url", out var urlElement) ||
+                urlElement.ValueKind != JsonValueKind.String ||
+                !Uri.TryCreate(urlElement.GetString(), UriKind.Absolute, out var url))
+            {
+                continue;
+            }
+
+            var name = nameElement.GetString();
+            if (!IsTrustedAsset(url, repository, tag, name!))
+                continue;
+            if (string.Equals(name, installerName, StringComparison.Ordinal))
+            {
+                installer = url;
+                if (asset.TryGetProperty("size", out var sizeElement) && sizeElement.TryGetInt64(out var value))
+                    size = value;
+            }
+            else if (string.Equals(name, checksumName, StringComparison.Ordinal))
+            {
+                checksum = url;
+            }
+        }
+
+        return installer is not null && checksum is not null && size is > 0
+            ? new(version, installer, checksum, size)
+            : null;
+    }
+
+    internal static bool IsTrustedAsset(Uri uri, string repository, string tag, string name)
+    {
+        var expectedPath = $"/{repository}/releases/download/{Uri.EscapeDataString(tag)}/{Uri.EscapeDataString(name)}";
+        return uri.Scheme == Uri.UriSchemeHttps &&
+            uri.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase) &&
+            uri.AbsolutePath.Equals(expectedPath, StringComparison.OrdinalIgnoreCase) &&
+            string.IsNullOrEmpty(uri.Query) && string.IsNullOrEmpty(uri.Fragment);
     }
 
 }
