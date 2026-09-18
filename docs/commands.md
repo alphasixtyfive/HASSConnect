@@ -1,5 +1,7 @@
 # PC commands
 
+<img src="images/controls.png" width="720" alt="HASS Connect Controls page">
+
 HASS Connect accepts a small, fixed set of Home Assistant notification messages as
 PC commands. Open **Controls** in the app, enable PC control, and choose the commands
 this PC may run. PC control and every individual command are opt-in.

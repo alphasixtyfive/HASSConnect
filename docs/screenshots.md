@@ -32,6 +32,9 @@ existing verified image in place or omit the image until a proper capture can be
 6. Crop only the title bar or empty border when needed, using a lossless operation.
 7. Keep every screenshot in the set at the same window size, theme, and scale.
 
+Use `tools/Capture-HassConnectWindow.ps1` for the lossless capture after arranging the
+required page. The script makes its capture thread DPI-aware and writes PNG directly.
+
 An 800 × 840 DIP window on a display scaled above 100% must produce an image larger than
 800 × 840 pixels. A capture near 788 × 803 pixels is a logical-pixel preview and must be
 rejected.
