@@ -625,8 +625,7 @@ public sealed partial class MainWindow : Window
 
     private CustomCommandDefinition ReadCustomCommandDialog(bool enabled)
     {
-        var arguments = CustomCommandArgumentsBox.Text.Replace("\r\n", "\n", StringComparison.Ordinal)
-            .Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        var arguments = CustomCommandPolicy.ParseArguments(CustomCommandArgumentsBox.Text);
         return CustomCommandPolicy.Create(
             CustomCommandIdBox.Text,
             CustomCommandNameBox.Text,

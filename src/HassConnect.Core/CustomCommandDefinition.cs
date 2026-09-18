@@ -113,6 +113,9 @@ public static partial class CustomCommandPolicy
         return start;
     }
 
+    public static string[] ParseArguments(string? text) =>
+        (text ?? string.Empty).Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
+
     public static bool IsCustomCommandId(string? value) =>
         value is not null && CommandId().IsMatch(value);
 

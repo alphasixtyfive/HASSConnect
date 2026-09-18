@@ -64,6 +64,13 @@ public sealed class CustomCommandTests
                 Enumerable.Repeat("argument", CustomCommandPolicy.MaximumArguments + 1)));
     }
 
+    [Theory]
+    [InlineData("-applaunch\r1091500")]
+    [InlineData("-applaunch\n1091500")]
+    [InlineData("-applaunch\r\n1091500")]
+    public void ParsesLaunchOptionsFromWindowsAndWinUiLineEndings(string text) =>
+        Assert.Equal(["-applaunch", "1091500"], CustomCommandPolicy.ParseArguments(text));
+
     [Fact]
     public void CollectionRejectsDuplicateIdentifiersAndTooManyCommands()
     {
