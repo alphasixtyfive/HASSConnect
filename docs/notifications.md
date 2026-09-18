@@ -1,5 +1,7 @@
 # Notifications
 
+<img src="images/notifications.jpg" width="720" alt="HASS Connect Notifications page">
+
 Enable notifications on the Notifications page. HASS Connect receives messages over Home Assistant's WebSocket connection and displays native Windows notifications. No MQTT broker, cloud relay or custom Home Assistant integration is required.
 
 The app must remain running, including in the tray, with the PC awake and connected. Messages are not queued while offline. Windows notification settings and Do not disturb control whether a banner or sound appears. The **Send test** button checks local Windows delivery; sending from Home Assistant checks the full connection.

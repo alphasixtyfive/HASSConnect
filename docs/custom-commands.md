@@ -1,5 +1,7 @@
 # Custom commands
 
+<img src="images/custom-command-editor.jpg" width="720" alt="HASS Connect custom-command editor">
+
 Custom commands are for the PC actions that HASS Connect does not include out of the box.
 You choose a program and, if needed, a fixed set of launch options. Home Assistant can run
 that saved command, but it cannot change the program or its options.
