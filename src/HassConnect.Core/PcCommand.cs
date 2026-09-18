@@ -2,7 +2,7 @@ using System.Text.Json;
 
 namespace HassConnect.Core;
 
-public enum PcCommandKind { Lock, MonitorSleep, Sleep, Media, VolumeMute, VolumeLevel }
+public enum PcCommandKind { Lock, MonitorSleep, Sleep, Media, VolumeMute, VolumeLevel, Custom }
 public enum MediaCommand { PlayPause, Next, Previous, Stop }
 
 public static class PcCommandIds
@@ -22,7 +22,11 @@ public static class PcCommandIds
     public static bool IsKnown(string id) => All.Contains(id, StringComparer.Ordinal);
 }
 
-public sealed record PcCommand(PcCommandKind Kind, MediaCommand? Media = null, int? VolumeLevel = null)
+public sealed record PcCommand(
+    PcCommandKind Kind,
+    MediaCommand? Media = null,
+    int? VolumeLevel = null,
+    string? CustomId = null)
 {
     public string Id => Kind switch
     {
@@ -32,6 +36,7 @@ public sealed record PcCommand(PcCommandKind Kind, MediaCommand? Media = null, i
         PcCommandKind.Media => PcCommandIds.Media,
         PcCommandKind.VolumeMute => PcCommandIds.VolumeMute,
         PcCommandKind.VolumeLevel => PcCommandIds.VolumeLevel,
+        PcCommandKind.Custom when CustomCommandPolicy.IsCustomCommandId(CustomId) => CustomId!,
         _ => throw new ArgumentOutOfRangeException(nameof(Kind))
     };
 
@@ -45,6 +50,8 @@ public sealed record PcCommand(PcCommandKind Kind, MediaCommand? Media = null, i
             PcCommandIds.Media => new(PcCommandKind.Media, ParseMedia(Text(data, "media_command"))),
             PcCommandIds.VolumeMute => new(PcCommandKind.VolumeMute),
             PcCommandIds.VolumeLevel => new(PcCommandKind.VolumeLevel, VolumeLevel: ParseVolume(data)),
+            _ when CustomCommandPolicy.IsCustomCommandId(message) =>
+                new(PcCommandKind.Custom, CustomId: message),
             _ => null
         };
     }

@@ -240,6 +240,69 @@ internal sealed class SensorSession : IAsyncDisposable
         finally { _gate.Release(); Changed?.Invoke(); }
     }
 
+    public async Task SaveCustomCommandAsync(CustomCommandDefinition command)
+    {
+        await _gate.WaitAsync(_lifetime.Token);
+        try
+        {
+            var validated = CustomCommandPolicy.Create(command.Id, command.Name, command.ExecutablePath,
+                command.Arguments, command.Enabled, requireExecutable: true);
+            var commands = _settings.CustomCommands.ToList();
+            var index = commands.FindIndex(existing => existing.Id == validated.Id);
+            if (index >= 0) commands[index] = validated;
+            else
+            {
+                if (commands.Count >= CustomCommandPolicy.MaximumCommands)
+                    throw new InvalidOperationException($"No more than {CustomCommandPolicy.MaximumCommands} custom commands can be configured.");
+                commands.Add(validated);
+            }
+            CustomCommandPolicy.ValidateCollection(commands);
+            SaveSettings(_settings with { CustomCommands = commands });
+            _notifications.UpdateOptions(_settings);
+        }
+        finally { _gate.Release(); Changed?.Invoke(); }
+    }
+
+    public async Task SetCustomCommandEnabledAsync(string id, bool enabled)
+    {
+        await _gate.WaitAsync(_lifetime.Token);
+        try
+        {
+            var commands = _settings.CustomCommands.ToList();
+            var index = commands.FindIndex(command => command.Id == id);
+            if (index < 0) throw new ArgumentOutOfRangeException(nameof(id));
+            commands[index] = commands[index] with { Enabled = enabled };
+            SaveSettings(_settings with { CustomCommands = commands });
+            _notifications.UpdateOptions(_settings);
+        }
+        finally { _gate.Release(); Changed?.Invoke(); }
+    }
+
+    public async Task RemoveCustomCommandAsync(string id)
+    {
+        await _gate.WaitAsync(_lifetime.Token);
+        try
+        {
+            var commands = _settings.CustomCommands.Where(command => command.Id != id).ToList();
+            if (commands.Count == _settings.CustomCommands.Count) throw new ArgumentOutOfRangeException(nameof(id));
+            SaveSettings(_settings with { CustomCommands = commands });
+            _notifications.UpdateOptions(_settings);
+        }
+        finally { _gate.Release(); Changed?.Invoke(); }
+    }
+
+    public async Task TestCustomCommandAsync(CustomCommandDefinition command)
+    {
+        await _gate.WaitAsync(_lifetime.Token);
+        try
+        {
+            var validated = CustomCommandPolicy.Create(command.Id, command.Name, command.ExecutablePath,
+                command.Arguments, command.Enabled, requireExecutable: true);
+            _notifications.TestCustomCommand(validated);
+        }
+        finally { _gate.Release(); }
+    }
+
     public async Task TestNotificationAsync()
     {
         await _gate.WaitAsync(_lifetime.Token);

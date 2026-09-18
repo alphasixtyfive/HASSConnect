@@ -5,11 +5,37 @@
   <StackPanel Spacing="12">
     <Border Background="{ThemeResource CardSurfaceBrush}" BorderBrush="{ThemeResource SectionBorderBrush}" BorderThickness="1" CornerRadius="8">
       <local:SettingsRow x:Name="MasterRow" Title="Enable PC control" Glyph="&#xE7F4;"
-                         ShowsToggleState="True" ShowDivider="False" ToggleChanged="MasterRow_Changed"
+                         ShowDivider="False" ToggleChanged="MasterRow_Changed"
                          ToolTipService.ToolTip="Allow the selected Home Assistant commands to control this PC." />
     </Border>
     <TextBlock x:Name="StatusText" FontSize="12" TextWrapping="Wrap" Visibility="Collapsed"
                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
     <StackPanel x:Name="ControlGroups" Spacing="16" />
+    <StackPanel Spacing="8">
+      <TextBlock Text="Custom commands" Style="{StaticResource SettingsSectionHeader}" />
+      <Border x:Name="CustomCommandsCard"
+              Background="{ThemeResource CardSurfaceBrush}" BorderBrush="{ThemeResource SectionBorderBrush}"
+              BorderThickness="1" CornerRadius="8">
+        <StackPanel>
+          <Grid MinHeight="64" Padding="16,10" ColumnSpacing="16"
+                BorderBrush="{ThemeResource SectionBorderBrush}" BorderThickness="0,0,0,1">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+            <StackPanel Spacing="2" VerticalAlignment="Center">
+              <TextBlock Text="Trusted programs" Style="{StaticResource BodyTextBlockStyle}" />
+              <TextBlock Text="Let Home Assistant start approved apps on this PC."
+                         Style="{StaticResource CaptionTextBlockStyle}" TextWrapping="Wrap"
+                         Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+            </StackPanel>
+            <Button x:Name="AddCustomCommandButton" Grid.Column="1" Content="Add"
+                    MinWidth="80" VerticalAlignment="Center" Click="AddCustomCommand_Click"
+                    ToolTipService.ToolTip="Add up to 20 locally approved commands." />
+          </Grid>
+          <TextBlock x:Name="NoCustomCommandsText" Text="No custom commands yet." Padding="16,12"
+                     Style="{StaticResource BodyTextBlockStyle}"
+                     Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+          <StackPanel x:Name="CustomCommandRows" />
+        </StackPanel>
+      </Border>
+    </StackPanel>
   </StackPanel>
 </UserControl>

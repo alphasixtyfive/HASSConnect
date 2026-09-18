@@ -54,6 +54,11 @@ public sealed partial class SettingsRow : UserControl
         get => Switch.IsOn;
         set
         {
+            if (Switch.IsOn == value)
+            {
+                UpdateToggleState();
+                return;
+            }
             _updating = true;
             try
             {
@@ -104,7 +109,7 @@ public sealed partial class SettingsRow : UserControl
     {
         if (TitleText is null || ValueLabel is null) return;
 
-        var stacked = Row.ActualWidth < 440 && ValueLabel.Visibility == Visibility.Visible;
+        var stacked = Row.ActualWidth < 560 && ValueLabel.Visibility == Visibility.Visible;
         Grid.SetColumn(ValueLabel, stacked ? 0 : 1);
         Grid.SetRow(ValueLabel, stacked ? 1 : 0);
         Grid.SetColumnSpan(TitleText, stacked ? 2 : 1);

@@ -20,9 +20,9 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
-            <TextBlock x:Name="TitleText" FontSize="14"
+            <TextBlock x:Name="TitleText" Style="{StaticResource BodyTextBlockStyle}"
                        VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,8,16,8" />
-            <TextBlock x:Name="ValueLabel" Grid.Column="1" FontSize="12"
+            <TextBlock x:Name="ValueLabel" Grid.Column="1" Style="{StaticResource CaptionTextBlockStyle}"
                        VerticalAlignment="Center" MaxWidth="180"
                        TextTrimming="CharacterEllipsis" Visibility="Collapsed"
                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />

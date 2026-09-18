@@ -68,4 +68,17 @@ public sealed class PcCommandTests
         using var json = JsonDocument.Parse("""{"message":"Hello"}""");
         Assert.Null(NotificationMessage.Parse(json.RootElement).Command);
     }
+
+    [Fact]
+    public void ParsesCustomCommandWithoutAcceptingRemoteArguments()
+    {
+        using var json = JsonDocument.Parse("""
+            {"message":"command_custom_open_music","data":{"executable":"cmd.exe","arguments":["/c","whoami"]}}
+            """);
+        var command = NotificationMessage.Parse(json.RootElement).Command;
+        Assert.Equal(PcCommandKind.Custom, command?.Kind);
+        Assert.Equal("command_custom_open_music", command?.Id);
+        Assert.Null(command?.Media);
+        Assert.Null(command?.VolumeLevel);
+    }
 }

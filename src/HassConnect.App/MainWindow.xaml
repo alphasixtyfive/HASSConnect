@@ -3,7 +3,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:views="using:HassConnect.App.Views"
     Title="HASS Connect">
-  <Grid x:Name="Root" Background="{ThemeResource WindowSurfaceBrush}">
+  <Grid x:Name="Root" Background="Transparent">
     <Grid.Resources>
       <Style x:Key="FieldError" TargetType="TextBlock">
         <Setter Property="FontSize" Value="12" />
@@ -86,10 +86,11 @@
         </RadioButton>
       </Grid>
     </Border>
-    <Grid Grid.Column="1" Margin="24,18,8,16" RowSpacing="16" MaxWidth="976" HorizontalAlignment="Stretch">
+    <Grid Grid.Column="1" Margin="24,18,24,16" RowSpacing="16" MaxWidth="976" HorizontalAlignment="Stretch">
       <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
-      <TextBlock x:Name="PageTitle" Text="Sensors" FontSize="24" FontWeight="SemiBold" MinHeight="38" VerticalAlignment="Center" />
-      <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+      <TextBlock x:Name="PageTitle" Text="Sensors" Style="{StaticResource TitleTextBlockStyle}" MinHeight="38" VerticalAlignment="Center" />
+      <ScrollViewer Grid.Row="1" Margin="0,0,-16,0"
+                    HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
         <StackPanel Spacing="12" HorizontalAlignment="Stretch" Margin="0,0,16,0">
           <InfoBar x:Name="ErrorBar" IsOpen="False" IsClosable="True" Severity="Error" />
           <views:SensorSettingsView x:Name="SensorsPage" />
@@ -161,7 +162,7 @@
               </StackPanel>
             </Border>
             <StackPanel Spacing="8">
-              <TextBlock Text="General" FontSize="14" FontWeight="SemiBold" Margin="8,0,0,0" />
+              <TextBlock Text="General" Style="{StaticResource SettingsSectionHeader}" />
               <Border Background="{ThemeResource CardSurfaceBrush}" BorderBrush="{ThemeResource SectionBorderBrush}" BorderThickness="1" CornerRadius="8">
                 <StackPanel>
                   <views:SettingsRow Title="Appearance" Glyph="&#xE790;">
@@ -170,12 +171,12 @@
                     </views:SettingsRow.TrailingContent>
                   </views:SettingsRow>
                   <views:SettingsRow x:Name="StartupRow" Title="Start with Windows" Glyph="&#xE7E8;"
-                                     ShowsToggleState="True" ToggleChanged="Startup_Toggled" />
+                                     ToggleChanged="Startup_Toggled" />
                   <views:SettingsRow Title="Diagnostic logs" Glyph="&#xE8A5;">
                     <views:SettingsRow.TrailingContent><Button Content="Open folder" Width="120" Click="OpenLogs_Click" AutomationProperties.Name="Open diagnostic log folder" /></views:SettingsRow.TrailingContent>
                   </views:SettingsRow>
                   <views:SettingsRow Title="About HASS Connect" Glyph="&#xE946;" ShowDivider="False">
-                    <views:SettingsRow.TrailingContent><Button Content="About" Width="120" Click="OpenAbout_Click" /></views:SettingsRow.TrailingContent>
+                    <views:SettingsRow.TrailingContent><Button Content="Open" Width="120" Click="OpenAbout_Click" AutomationProperties.Name="Open About HASS Connect" /></views:SettingsRow.TrailingContent>
                   </views:SettingsRow>
                 </StackPanel>
               </Border>
@@ -185,8 +186,70 @@
         </StackPanel>
       </ScrollViewer>
     </Grid>
-    <ContentDialog Grid.ColumnSpan="2" x:Name="AboutDialog" CloseButtonText="Close" DefaultButton="None">
-      <views:AboutView />
+    <ContentDialog Grid.ColumnSpan="2" x:Name="AboutDialog" KeyDown="AboutDialog_KeyDown">
+      <StackPanel Spacing="16">
+        <views:AboutView />
+        <Border BorderBrush="{ThemeResource SectionBorderBrush}" BorderThickness="0,1,0,0" Padding="0,16,0,0">
+          <Button Content="Close" Width="120" HorizontalAlignment="Right" Click="CloseAboutDialog_Click" />
+        </Border>
+      </StackPanel>
+    </ContentDialog>
+    <ContentDialog Grid.ColumnSpan="2" x:Name="CustomCommandDialog" Title="Custom command"
+                   KeyDown="CustomCommandDialog_KeyDown">
+      <StackPanel Spacing="12" MinWidth="420">
+        <TextBlock Text="Choose a trusted program that Home Assistant can start on this PC."
+                   TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+        <TextBox x:Name="CustomCommandNameBox" Header="Display name" MaxLength="60"
+                 PlaceholderText="Open music player" />
+        <StackPanel Spacing="4">
+          <TextBox x:Name="CustomCommandIdBox" Header="Home Assistant command" MaxLength="47"
+                   PlaceholderText="command_custom_open_music" />
+          <TextBlock Text="Send this exact value as the notification message in Home Assistant."
+                     Style="{StaticResource CaptionTextBlockStyle}"
+                     Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+        </StackPanel>
+        <Grid ColumnSpacing="8">
+          <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+          <TextBox x:Name="CustomCommandExecutableBox" Header="Program (.exe)" PlaceholderText="C:\Program Files\App\App.exe" />
+          <Button x:Name="BrowseCustomCommandButton" Grid.Column="1" Content="Browse…" VerticalAlignment="Bottom" Height="32"
+                  Click="BrowseCustomCommand_Click" />
+        </Grid>
+        <TextBox x:Name="CustomCommandArgumentsBox" Header="Optional launch options (one per line)"
+                 AcceptsReturn="True" TextWrapping="NoWrap" MinHeight="88"
+                 PlaceholderText="--profile&#x0a;Home Assistant" />
+        <TextBlock x:Name="CustomCommandError" Visibility="Collapsed" TextWrapping="Wrap"
+                   Foreground="{ThemeResource SystemFillColorCriticalBrush}" AutomationProperties.LiveSetting="Assertive" />
+        <StackPanel Spacing="6">
+          <Button x:Name="TestCustomCommandButton" Content="Test command" HorizontalAlignment="Left" Click="TestCustomCommand_Click" />
+          <TextBlock x:Name="CustomCommandTestStatus" Visibility="Collapsed" TextWrapping="Wrap"
+                     Foreground="{ThemeResource TextFillColorSecondaryBrush}" AutomationProperties.Name="Custom command test result"
+                     AutomationProperties.LiveSetting="Polite" />
+        </StackPanel>
+        <Border BorderBrush="{ThemeResource SectionBorderBrush}" BorderThickness="0,1,0,0"
+                Padding="0,16,0,0" Margin="0,4,0,0">
+          <Grid ColumnSpacing="8">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto" />
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Button x:Name="DeleteCustomCommandButton" Width="120" Visibility="Collapsed"
+                    Style="{StaticResource DangerButtonStyle}" Click="DeleteCustomCommand_Click"
+                    AutomationProperties.Name="Delete custom command">
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <FontIcon Glyph="&#xE74D;" FontSize="12" />
+                <TextBlock Text="Delete" />
+              </StackPanel>
+            </Button>
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
+              <Button x:Name="SaveCustomCommandButton" Content="Save" Width="120"
+                      Style="{StaticResource AccentButtonStyle}" Click="SaveCustomCommand_Click" />
+              <Button x:Name="CancelCustomCommandButton" Content="Cancel" Width="120"
+                      Click="CancelCustomCommand_Click" />
+            </StackPanel>
+          </Grid>
+        </Border>
+      </StackPanel>
     </ContentDialog>
   </Grid>
 </Window>

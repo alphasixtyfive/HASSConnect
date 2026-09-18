@@ -15,7 +15,7 @@ internal sealed class SettingsStore
         if (!File.Exists(path)) return new Settings();
         var settings = JsonSerializer.Deserialize<Settings>(File.ReadAllBytes(path)) ?? throw new InvalidDataException("Settings are empty.");
         if (settings.SchemaVersion != 1) throw new InvalidDataException("Settings were saved by a newer version. Update HASS Connect to open them.");
-        return settings;
+        return settings with { CustomCommands = CustomCommandPolicy.ValidateCollection(settings.CustomCommands).ToList() };
     }
 
     public Credentials? LoadCredentials()

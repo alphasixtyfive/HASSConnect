@@ -13,6 +13,7 @@ public sealed record Settings
     public bool NotificationSound { get; init; } = true;
     public bool PcControlEnabled { get; init; }
     public HashSet<string> EnabledPcCommands { get; init; } = new(PcCommandIds.All);
+    public List<CustomCommandDefinition> CustomCommands { get; init; } = [];
     public HashSet<string> EnabledSensors { get; init; } = [];
 }
 

@@ -47,10 +47,43 @@ data:
 The [example PC Controls dashboard](pc-controls-dashboard.md) provides phone-friendly
 buttons for every command and uses confirmation prompts for disruptive actions.
 
+## Custom commands
+
+Custom commands cover device-specific actions without turning incoming Home Assistant
+messages into a remote shell. In **Controls > Custom commands**, select **Add**
+and configure:
+
+- A display name used only in HASS Connect.
+- A stable command name beginning with `command_custom_`, followed by lowercase
+  letters, numbers or underscores. Command names cannot be changed after creation.
+- An absolute path to a local `.exe` file.
+- Up to 16 fixed arguments, one per line. A line containing spaces remains one argument.
+
+For example, a command named `command_custom_open_music` is triggered with:
+
+```yaml
+action: notify.mobile_app_your_pc
+data:
+  message: command_custom_open_music
+```
+
+The executable and arguments are stored locally. Data attached to the Home Assistant
+message cannot replace or add arguments. To run a script, explicitly select its trusted
+interpreter as the executable and put the script path and other fixed values in the
+argument list. Avoid interpreters or scripts that evaluate untrusted files or network
+content.
+
+See the [custom-command guide](custom-commands.md) for setup examples, validation rules,
+testing, editing, deletion and troubleshooting.
+
 ## Safety and failure handling
 
 - Unknown messages remain ordinary notifications; they are never executed as commands.
-- Arbitrary executables, scripts, shell text and key combinations are not supported.
+- Custom commands must be explicitly configured on the PC and individually enabled.
+- Custom command names, paths and arguments are validated before saving and again before execution.
+- Custom commands start the selected `.exe` directly, without a shell, elevation or remote arguments.
+- Only local absolute executable paths are accepted; UNC paths, relative paths and non-`.exe` targets are rejected.
+- A custom command can start at most once every five seconds, with a global limit of ten starts per minute.
 - Disabled commands are ignored and recorded in the local diagnostic log.
 - Sleep is delayed briefly so Home Assistant can receive its delivery confirmation
   before the network connection is suspended.

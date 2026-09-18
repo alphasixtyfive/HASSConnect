@@ -22,15 +22,18 @@ internal sealed class NotificationService : IAsyncDisposable
     private readonly WindowsNotifications _windows;
     private readonly DesktopActivation _activation;
     private readonly IPcCommandExecutor _pcCommands;
+    private readonly ICustomCommandLauncher _customCommands;
     private bool _disposed;
     private readonly object _taskGate = new();
     private readonly List<Task> _backgroundTasks = [];
 
-    public NotificationService(WindowsNotifications windows, DesktopActivation activation, IPcCommandExecutor pcCommands)
+    public NotificationService(WindowsNotifications windows, DesktopActivation activation,
+        IPcCommandExecutor pcCommands, ICustomCommandLauncher customCommands)
     {
         _windows = windows;
         _activation = activation;
         _pcCommands = pcCommands;
+        _customCommands = customCommands;
         _activation.ActionInvoked += QueueAction;
     }
 
@@ -77,6 +80,8 @@ internal sealed class NotificationService : IAsyncDisposable
     }
 
     public void UpdateOptions(Settings settings) => _settings = settings;
+
+    public void TestCustomCommand(CustomCommandDefinition command) => _customCommands.Execute(command);
 
     public async Task DisableNotificationsAsync(Settings settings, Credentials? credentials, CancellationToken ct)
     {
@@ -142,7 +147,15 @@ internal sealed class NotificationService : IAsyncDisposable
         if (credentials is null) return;
         if (message.Command is { } command)
         {
-            if (settings.PcControlEnabled && settings.EnabledPcCommands.Contains(command.Id))
+            if (command.Kind == PcCommandKind.Custom)
+            {
+                var configured = settings.CustomCommands.SingleOrDefault(candidate => candidate.Id == command.Id);
+                if (settings.PcControlEnabled && configured?.Enabled == true)
+                    ExecuteCustomCommand(configured);
+                else
+                    AppLog.Write("Custom command", "Ignored unknown or disabled command");
+            }
+            else if (settings.PcControlEnabled && settings.EnabledPcCommands.Contains(command.Id))
             {
                 // Give Home Assistant time to receive its delivery confirmation before
                 // the network connection is suspended with the PC.
@@ -243,6 +256,23 @@ internal sealed class NotificationService : IAsyncDisposable
                 ? $"Win32 error {win32.NativeErrorCode}"
                 : exception.GetType().Name;
             AppLog.Write("PC control", detail);
+        }
+    }
+
+    private void ExecuteCustomCommand(CustomCommandDefinition command)
+    {
+        try
+        {
+            _customCommands.Execute(command);
+            AppLog.Write("Custom command", $"Started {command.Id}");
+        }
+        catch (Exception exception) when (exception is Win32Exception or IOException or UnauthorizedAccessException or
+            ArgumentException or InvalidDataException or InvalidOperationException)
+        {
+            var detail = exception is Win32Exception win32
+                ? $"{command.Id}: Win32 error {win32.NativeErrorCode}"
+                : $"{command.Id}: {exception.GetType().Name}";
+            AppLog.Write("Custom command", detail);
         }
     }
 

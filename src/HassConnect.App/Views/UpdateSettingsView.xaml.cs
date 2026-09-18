@@ -72,16 +72,12 @@ public sealed partial class UpdateSettingsView : UserControl
 
     private async Task ConfirmAndInstallAsync(UpdatePackage package)
     {
-        var dialog = new ContentDialog
-        {
-            XamlRoot = XamlRoot,
-            Title = "Install HASS Connect update?",
-            Content = $"Version {package.Version} will be downloaded, verified, and opened in Setup. HASS Connect will close while Windows installs the update.",
-            PrimaryButtonText = "Download and install",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Primary
-        };
-        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+        if (!await DialogLayout.ShowConfirmationAsync(
+                XamlRoot,
+                "Install HASS Connect update?",
+                $"Version {package.Version} will be downloaded, verified, and opened in Setup. HASS Connect will close while Windows installs the update.",
+                "Install",
+                defaultToPrimary: true)) return;
 
         SetBusy(true);
         DownloadProgress.Visibility = Visibility.Visible;

@@ -5,7 +5,7 @@
   <StackPanel Spacing="12">
     <Border Background="{ThemeResource CardSurfaceBrush}" BorderBrush="{ThemeResource SectionBorderBrush}" BorderThickness="1" CornerRadius="8">
       <local:SettingsRow x:Name="MasterRow" Title="Enable sensors" Glyph="&#xE9D9;"
-                         ShowsToggleState="True" ShowDivider="False" ToggleChanged="MasterRow_Changed" />
+                         ShowDivider="False" ToggleChanged="MasterRow_Changed" />
     </Border>
     <StackPanel x:Name="SensorGroups" Spacing="16" />
   </StackPanel>

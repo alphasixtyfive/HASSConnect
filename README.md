@@ -15,6 +15,8 @@
   &nbsp; · &nbsp;
   <a href="docs/commands.md">PC commands</a>
   &nbsp; · &nbsp;
+  <a href="docs/custom-commands.md">Custom commands</a>
+  &nbsp; · &nbsp;
   <a href="https://github.com/alphasixtyfive/HASSConnect/issues">Report an issue</a>
 </p>
 
@@ -27,7 +29,7 @@ No MQTT broker or custom integration is required.
 
 For Windows 11 x64. Download the installer from the [latest release](https://github.com/alphasixtyfive/HASSConnect/releases/latest).
 
-Setup downloads the required Microsoft runtimes, so an internet connection is needed. This first release is unsigned, so Windows may show an unknown-publisher warning. Notifications do not require importing a certificate.
+Setup downloads the required Microsoft runtimes, so an internet connection is needed. The installer is currently unsigned, so Windows may show an unknown-publisher warning. Notifications do not require importing a certificate.
 
 1. Run the installer, then open **HASS Connect** from Start.
 2. Open **Settings**, enter your Home Assistant address and a long-lived access token, then connect.
@@ -96,9 +98,15 @@ The app must be running and connected. Windows Do not disturb can suppress banne
 
 ## Controls
 
-The **Controls** page can opt this PC into a small, fixed command set: lock, display sleep,
-system sleep, media playback, mute and volume level. PC control is off by default, and every
-command can be disabled independently. See the [PC command reference](docs/commands.md).
+The **Controls** page can opt this PC into built-in commands for lock, display sleep,
+system sleep, media playback, mute and volume level. It can also run locally approved custom
+executables with fixed arguments. PC control is off by default, and every command can be
+disabled independently. See the [PC command reference](docs/commands.md) and
+[custom-command guide](docs/custom-commands.md).
+
+<img src="docs/images/controls-custom-commands.jpg" width="788" alt="HASS Connect Controls page with custom commands">
+
+*Screenshot shows example custom commands.*
 
 ## Privacy and updates
 
@@ -106,7 +114,7 @@ Credentials are encrypted for your Windows account. Settings and logs stay in
 `%LOCALAPPDATA%/HassConnect`. No location updates are sent. Home Assistant may create
 a device tracker during registration; you can disable it.
 
-The **Updates** section in Settings checks GitHub for a newer stable release and opens its release
-page. Nothing is installed automatically.
+The **Updates** section checks GitHub automatically. After confirmation, HASS Connect can download,
+verify and open the official Setup bundle; nothing is installed without user action.
 
 [MIT License](LICENSE) · By [alphasixtyfive](https://github.com/alphasixtyfive)

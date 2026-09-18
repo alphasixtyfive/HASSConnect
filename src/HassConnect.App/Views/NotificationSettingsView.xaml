@@ -8,7 +8,7 @@
                 BorderThickness="1" CornerRadius="8">
             <views:SettingsRow x:Name="MasterRow" Title="Enable notifications" Glyph="&#xE8F2;"
                                ToolTipService.ToolTip="Requires this PC and HASS Connect to be running. Messages are not queued while offline."
-                               IsToggleEnabled="False" ShowsToggleState="True" ShowDivider="False" ToggleChanged="Master_Changed" />
+                               IsToggleEnabled="False" ShowDivider="False" ToggleChanged="Master_Changed" />
         </Border>
         <TextBlock x:Name="StatusText" FontSize="12" TextWrapping="Wrap" Visibility="Collapsed"
                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
@@ -17,7 +17,7 @@
                 BorderThickness="1" CornerRadius="8">
             <StackPanel>
                 <views:SettingsRow x:Name="SoundRow" Title="Sound" Glyph="&#xE767;" IsToggleEnabled="False"
-                                   ShowsToggleState="True" ToggleChanged="Sound_Changed" />
+                                   ToggleChanged="Sound_Changed" />
                 <views:SettingsRow x:Name="TestRow" Title="Test notification" Glyph="&#xE945;" ShowDivider="False">
                     <views:SettingsRow.TrailingContent>
                         <Button x:Name="TestButton" Content="Send test" IsEnabled="False" Click="Test_Click"

@@ -14,6 +14,15 @@
           <SolidColorBrush x:Key="WindowSurfaceBrush" Color="#F3F3F3" />
           <SolidColorBrush x:Key="CardSurfaceBrush" Color="#FFFFFF" />
           <SolidColorBrush x:Key="SectionBorderBrush" Color="#DEDEDE" />
+          <SolidColorBrush x:Key="DangerButtonBackgroundBrush" Color="#FDE7E9" />
+          <SolidColorBrush x:Key="DangerButtonBackgroundPointerOverBrush" Color="#FBD0D4" />
+          <SolidColorBrush x:Key="DangerButtonBackgroundPressedBrush" Color="#F7B7BD" />
+          <SolidColorBrush x:Key="DangerButtonBackgroundDisabledBrush" Color="#0F000000" />
+          <SolidColorBrush x:Key="DangerButtonBorderBrush" Color="#E37D85" />
+          <SolidColorBrush x:Key="DangerButtonForegroundBrush" Color="#A4262C" />
+          <SolidColorBrush x:Key="DangerButtonForegroundPointerOverBrush" Color="#A4262C" />
+          <SolidColorBrush x:Key="DangerButtonForegroundPressedBrush" Color="#A4262C" />
+          <SolidColorBrush x:Key="DangerButtonForegroundDisabledBrush" Color="#5C000000" />
         </ResourceDictionary>
         <ResourceDictionary x:Key="Dark">
           <Color x:Key="WindowSurfaceColor">#202020</Color>
@@ -21,6 +30,15 @@
           <SolidColorBrush x:Key="WindowSurfaceBrush" Color="#202020" />
           <SolidColorBrush x:Key="CardSurfaceBrush" Color="#2B2B2B" />
           <SolidColorBrush x:Key="SectionBorderBrush" Color="#404040" />
+          <SolidColorBrush x:Key="DangerButtonBackgroundBrush" Color="#512329" />
+          <SolidColorBrush x:Key="DangerButtonBackgroundPointerOverBrush" Color="#6A2B33" />
+          <SolidColorBrush x:Key="DangerButtonBackgroundPressedBrush" Color="#3E191E" />
+          <SolidColorBrush x:Key="DangerButtonBackgroundDisabledBrush" Color="#12FFFFFF" />
+          <SolidColorBrush x:Key="DangerButtonBorderBrush" Color="#8B414A" />
+          <SolidColorBrush x:Key="DangerButtonForegroundBrush" Color="#FFD9DC" />
+          <SolidColorBrush x:Key="DangerButtonForegroundPointerOverBrush" Color="#FFD9DC" />
+          <SolidColorBrush x:Key="DangerButtonForegroundPressedBrush" Color="#FFD9DC" />
+          <SolidColorBrush x:Key="DangerButtonForegroundDisabledBrush" Color="#5DFFFFFF" />
         </ResourceDictionary>
         <ResourceDictionary x:Key="HighContrast">
           <Color x:Key="WindowSurfaceColor">#000000</Color>
@@ -28,13 +46,22 @@
           <SolidColorBrush x:Key="WindowSurfaceBrush" Color="{ThemeResource SystemColorWindowColor}" />
           <SolidColorBrush x:Key="CardSurfaceBrush" Color="{ThemeResource SystemColorWindowColor}" />
           <SolidColorBrush x:Key="SectionBorderBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+          <SolidColorBrush x:Key="DangerButtonBackgroundBrush" Color="{ThemeResource SystemColorButtonFaceColor}" />
+          <SolidColorBrush x:Key="DangerButtonBackgroundPointerOverBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+          <SolidColorBrush x:Key="DangerButtonBackgroundPressedBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+          <SolidColorBrush x:Key="DangerButtonBackgroundDisabledBrush" Color="{ThemeResource SystemColorButtonFaceColor}" />
+          <SolidColorBrush x:Key="DangerButtonBorderBrush" Color="{ThemeResource SystemColorButtonTextColor}" />
+          <SolidColorBrush x:Key="DangerButtonForegroundBrush" Color="{ThemeResource SystemColorButtonTextColor}" />
+          <SolidColorBrush x:Key="DangerButtonForegroundPointerOverBrush" Color="{ThemeResource SystemColorHighlightTextColor}" />
+          <SolidColorBrush x:Key="DangerButtonForegroundPressedBrush" Color="{ThemeResource SystemColorHighlightTextColor}" />
+          <SolidColorBrush x:Key="DangerButtonForegroundDisabledBrush" Color="{ThemeResource SystemColorGrayTextColor}" />
         </ResourceDictionary>
       </ResourceDictionary.ThemeDictionaries>
       <Style x:Key="Card" TargetType="Border">
         <Setter Property="Background" Value="{ThemeResource CardSurfaceBrush}" />
         <Setter Property="BorderBrush" Value="{ThemeResource SectionBorderBrush}" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="CornerRadius" Value="8" />
         <Setter Property="Padding" Value="16" />
       </Style>
       <Style x:Key="SupportingText" TargetType="TextBlock">
@@ -42,6 +69,7 @@
         <Setter Property="FontSize" Value="13" />
         <Setter Property="TextWrapping" Value="Wrap" />
       </Style>
+      <Style x:Key="SettingsSectionHeader" TargetType="TextBlock" BasedOn="{StaticResource BodyStrongTextBlockStyle}" />
       <ControlTemplate x:Key="SettingsGroupCard" TargetType="ContentControl">
         <Border Background="{ThemeResource CardSurfaceBrush}"
                 BorderBrush="{ThemeResource SectionBorderBrush}"

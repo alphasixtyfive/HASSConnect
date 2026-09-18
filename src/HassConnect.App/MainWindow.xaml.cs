@@ -4,9 +4,12 @@ using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.Win32;
 using HassConnect.App.Services;
+using HassConnect.App.Views;
+using HassConnect.Core;
 using HassConnect.HomeAssistant;
 
 namespace HassConnect.App;
@@ -20,6 +23,11 @@ public sealed partial class MainWindow : Window
     private bool _loading = true;
     private bool _connecting;
     private bool _loadingDashboards;
+    private bool _customCommandDialogOpen;
+    private bool _customCommandDeleteRequested;
+    private bool _customCommandSaving;
+    private bool _customCommandTesting;
+    private CustomCommandDefinition? _editingCustomCommand;
     private double _windowScale;
     internal event Action? QuitRequested;
 
@@ -42,7 +50,7 @@ public sealed partial class MainWindow : Window
         try
         {
             _session = new SensorSession(new SettingsStore(), _windowHandle,
-                new NotificationService(notifications, activation, new WindowsPcControl()));
+                new NotificationService(notifications, activation, new WindowsPcControl(), new CustomCommandLauncher()));
             _session.Changed += () => DispatcherQueue.TryEnqueue(Refresh);
             ServerBox.Text = _session.Settings.ServerUrl;
             DeviceBox.Text = _session.Settings.DeviceName;
@@ -60,6 +68,9 @@ public sealed partial class MainWindow : Window
             NotificationsPage.TestRequested += TestNotification_Requested;
             ControlsPage.EnabledChanged += PcControl_Changed;
             ControlsPage.CommandChanged += PcCommand_Changed;
+            ControlsPage.AddCustomCommandRequested += () => _ = ShowCustomCommandDialogAsync(null);
+            ControlsPage.EditCustomCommandRequested += id => _ = ShowCustomCommandDialogAsync(id);
+            ControlsPage.CustomCommandEnabledChanged += CustomCommandEnabled_Changed;
             UpdatesPage.AvailabilityChanged += available =>
                 SettingsUpdateBadge.Visibility = available ? Visibility.Visible : Visibility.Collapsed;
             Refresh();
@@ -303,6 +314,11 @@ public sealed partial class MainWindow : Window
         await AboutDialog.ShowAsync();
     }
 
+    private void CloseAboutDialog_Click(object sender, RoutedEventArgs args) => AboutDialog.Hide();
+
+    private void AboutDialog_KeyDown(object sender, KeyRoutedEventArgs args) =>
+        DialogLayout.CloseOnEscape(AboutDialog, args);
+
     private async void Sensor_Changed(string id, bool enabled)
     {
         if (_session is null) return;
@@ -452,6 +468,209 @@ public sealed partial class MainWindow : Window
         try { await _session.SetPcCommandEnabledAsync(id, enabled); }
         catch (Exception ex) { ShowError(UserMessage(ex)); }
         finally { ControlsPage.SetCommandBusy(id, false); Refresh(); }
+    }
+
+    private async void CustomCommandEnabled_Changed(string id, bool enabled)
+    {
+        if (_session is null) return;
+        ControlsPage.SetCommandBusy(id, true);
+        try { await _session.SetCustomCommandEnabledAsync(id, enabled); }
+        catch (Exception ex) { ShowError(UserMessage(ex)); }
+        finally { ControlsPage.SetCommandBusy(id, false); Refresh(); }
+    }
+
+    private async Task ShowCustomCommandDialogAsync(string? id)
+    {
+        if (_session is null || _customCommandDialogOpen) return;
+        _customCommandDialogOpen = true;
+        try { await ShowCustomCommandDialogCoreAsync(id); }
+        finally
+        {
+            _editingCustomCommand = null;
+            _customCommandDialogOpen = false;
+        }
+    }
+
+    private async Task ShowCustomCommandDialogCoreAsync(string? id)
+    {
+        if (_session is null) return;
+        var existing = id is null
+            ? null
+            : _session.Settings.CustomCommands.SingleOrDefault(command => command.Id == id);
+        if (id is not null && existing is null) return;
+
+        CustomCommandDialog.XamlRoot = Root.XamlRoot;
+        CustomCommandDialog.Title = existing is null ? "Add custom command" : "Edit custom command";
+        SaveCustomCommandButton.Content = existing is null ? "Add" : "Save";
+        DeleteCustomCommandButton.Visibility = existing is null ? Visibility.Collapsed : Visibility.Visible;
+        CustomCommandNameBox.Text = existing?.Name ?? "";
+        CustomCommandIdBox.Text = existing?.Id ?? "command_custom_";
+        CustomCommandIdBox.IsReadOnly = existing is not null;
+        CustomCommandExecutableBox.Text = existing?.ExecutablePath ?? "";
+        CustomCommandArgumentsBox.Text = existing is null ? "" : string.Join(Environment.NewLine, existing.Arguments);
+        CustomCommandError.Visibility = Visibility.Collapsed;
+        CustomCommandTestStatus.Visibility = Visibility.Collapsed;
+        _editingCustomCommand = existing;
+        _customCommandDeleteRequested = false;
+        _customCommandSaving = false;
+        _customCommandTesting = false;
+        SetCustomCommandDialogEnabled(true);
+        while (true)
+        {
+            await CustomCommandDialog.ShowAsync();
+            if (!_customCommandDeleteRequested) return;
+
+            var confirmed = await DialogLayout.ShowConfirmationAsync(
+                Root.XamlRoot,
+                "Delete custom command?",
+                $"Delete “{existing!.Name}”? Home Assistant calls using {existing.Id} will stop working.",
+                "Delete",
+                defaultToPrimary: false,
+                destructive: true);
+            if (!confirmed)
+            {
+                _customCommandDeleteRequested = false;
+                continue;
+            }
+
+            try { await _session.RemoveCustomCommandAsync(existing.Id); }
+            catch (Exception ex) { ShowError(UserMessage(ex)); }
+            finally { Refresh(); }
+            return;
+        }
+    }
+
+    private async void SaveCustomCommand_Click(object sender, RoutedEventArgs args) =>
+        await SaveCustomCommandAsync();
+
+    private void DeleteCustomCommand_Click(object sender, RoutedEventArgs args)
+    {
+        if (_editingCustomCommand is null || _customCommandSaving) return;
+        _customCommandDeleteRequested = true;
+        CustomCommandDialog.Hide();
+    }
+
+    private void CancelCustomCommand_Click(object sender, RoutedEventArgs args)
+    {
+        if (!_customCommandSaving) CustomCommandDialog.Hide();
+    }
+
+    private async void CustomCommandDialog_KeyDown(object sender, KeyRoutedEventArgs args)
+    {
+        if (_customCommandSaving || _customCommandTesting) return;
+        if (args.Key == Windows.System.VirtualKey.Escape)
+        {
+            args.Handled = true;
+            CustomCommandDialog.Hide();
+            return;
+        }
+        if (args.Key != Windows.System.VirtualKey.Enter) return;
+        var focused = FocusManager.GetFocusedElement(Root.XamlRoot);
+        if (ReferenceEquals(focused, CustomCommandArgumentsBox) || focused is Button) return;
+        args.Handled = true;
+        await SaveCustomCommandAsync();
+    }
+
+    private async Task SaveCustomCommandAsync()
+    {
+        if (_session is null || _customCommandSaving) return;
+
+        _customCommandSaving = true;
+        SetCustomCommandDialogEnabled(false);
+        try
+        {
+            var command = ReadCustomCommandDialog(_editingCustomCommand?.Enabled ?? true);
+            if (_editingCustomCommand is null && _session.Settings.CustomCommands.Any(item => item.Id == command.Id))
+                throw new ArgumentException("That Home Assistant command is already configured.", "id");
+            await _session.SaveCustomCommandAsync(command);
+            CustomCommandError.Visibility = Visibility.Collapsed;
+            Refresh();
+            CustomCommandDialog.Hide();
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidDataException or InvalidOperationException)
+        {
+            CustomCommandError.Text = ex.Message;
+            CustomCommandError.Visibility = Visibility.Visible;
+            FocusInvalidCustomCommandField(ex);
+        }
+        finally
+        {
+            _customCommandSaving = false;
+            SetCustomCommandDialogEnabled(true);
+        }
+    }
+
+    private void SetCustomCommandDialogEnabled(bool enabled)
+    {
+        var available = enabled && !_customCommandSaving && !_customCommandTesting;
+        SaveCustomCommandButton.IsEnabled = available;
+        DeleteCustomCommandButton.IsEnabled = available;
+        CancelCustomCommandButton.IsEnabled = available;
+        BrowseCustomCommandButton.IsEnabled = available;
+        TestCustomCommandButton.IsEnabled = available;
+    }
+
+    private void FocusInvalidCustomCommandField(Exception exception)
+    {
+        var field = (exception as ArgumentException)?.ParamName switch
+        {
+            "id" => CustomCommandIdBox,
+            "name" => CustomCommandNameBox,
+            "executablePath" => CustomCommandExecutableBox,
+            "arguments" => CustomCommandArgumentsBox,
+            _ => null
+        };
+        field?.Focus(FocusState.Programmatic);
+    }
+
+    private CustomCommandDefinition ReadCustomCommandDialog(bool enabled)
+    {
+        var arguments = CustomCommandArgumentsBox.Text.Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        return CustomCommandPolicy.Create(
+            CustomCommandIdBox.Text,
+            CustomCommandNameBox.Text,
+            CustomCommandExecutableBox.Text,
+            arguments,
+            enabled,
+            requireExecutable: true);
+    }
+
+    private async void TestCustomCommand_Click(object sender, RoutedEventArgs args)
+    {
+        if (_session is null || _customCommandSaving || _customCommandTesting) return;
+        _customCommandTesting = true;
+        SetCustomCommandDialogEnabled(false);
+        CustomCommandError.Visibility = Visibility.Collapsed;
+        CustomCommandTestStatus.Visibility = Visibility.Collapsed;
+        try
+        {
+            var command = ReadCustomCommandDialog(_editingCustomCommand?.Enabled ?? true);
+            await _session.TestCustomCommandAsync(command);
+            CustomCommandTestStatus.Text = "Started. Confirm it behaved as expected before saving.";
+            CustomCommandTestStatus.Visibility = Visibility.Visible;
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidDataException or InvalidOperationException or
+            IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
+        {
+            CustomCommandError.Text = ex.Message;
+            CustomCommandError.Visibility = Visibility.Visible;
+            FocusInvalidCustomCommandField(ex);
+        }
+        finally
+        {
+            _customCommandTesting = false;
+            SetCustomCommandDialogEnabled(true);
+        }
+    }
+
+    private async void BrowseCustomCommand_Click(object sender, RoutedEventArgs args)
+    {
+        var picker = new Windows.Storage.Pickers.FileOpenPicker();
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, _windowHandle);
+        picker.FileTypeFilter.Add(".exe");
+        var file = await picker.PickSingleFileAsync();
+        if (file is not null) CustomCommandExecutableBox.Text = file.Path;
     }
 
     private void OpenLogs_Click(object sender, RoutedEventArgs e) => Process.Start(new ProcessStartInfo("explorer.exe", AppLog.DataDirectory) { UseShellExecute = true });

@@ -30,7 +30,8 @@
         <ExePackagePayload Name="WindowsAppRuntimeInstall-x64.exe"
                            DownloadUrl="$(var.WindowsAppRuntimeUrl)" Hash="$(var.WindowsAppRuntimeSha512)" Size="$(var.WindowsAppRuntimeSize)" />
       </ExePackage>
-      <MsiPackage SourceFile="$(var.MsiSource)" Compressed="yes" Vital="yes" />
+      <!-- The bundle owns the public Apps & Features entry; keep its internal MSI hidden. -->
+      <MsiPackage SourceFile="$(var.MsiSource)" Compressed="yes" Vital="yes" Visible="no" />
     </Chain>
   </Bundle>
 </Wix>

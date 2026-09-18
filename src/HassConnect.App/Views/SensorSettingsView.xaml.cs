@@ -35,7 +35,11 @@ public sealed partial class SensorSettingsView : UserControl
             }
             if (rows.Children.LastOrDefault() is SettingsRow last) last.ShowDivider = false;
             var section = new StackPanel { Spacing = 8 };
-            section.Children.Add(new TextBlock { Text = group.Key, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
+            section.Children.Add(new TextBlock
+            {
+                Text = group.Key,
+                Style = (Style)Application.Current.Resources["SettingsSectionHeader"]
+            });
             var card = new ContentControl { Template = (ControlTemplate)Application.Current.Resources["SettingsGroupCard"] };
             card.Content = rows;
             section.Children.Add(card);
