@@ -65,6 +65,22 @@ public sealed class HaPayloadTests
         Assert.Equal(JsonValueKind.Null, payload.GetProperty("state").ValueKind);
     }
 
+    [Fact]
+    public async Task DynamicDriveSensorUsesItsRuntimeDefinitionWhenUpdating()
+    {
+        using var handler = new PayloadHandler();
+        using var client = new HaClient(new Uri("https://home.example/"), "test", handler);
+        var definitions = DriveSensor.Create('d').ToDictionary(sensor => sensor.Id, StringComparer.Ordinal);
+
+        await client.UpdateSensorsAsync("test", [new SensorReading("disk_d_usage", 42.5)],
+            definitions, CancellationToken.None);
+
+        var payload = handler.Payload.GetProperty("data")[0];
+        Assert.Equal("disk_d_usage", payload.GetProperty("unique_id").GetString());
+        Assert.Equal(42.5, payload.GetProperty("state").GetDouble());
+        Assert.Equal("mdi:harddisk", payload.GetProperty("icon").GetString());
+    }
+
     private sealed class PayloadHandler : HttpMessageHandler
     {
         public JsonElement Payload { get; private set; }

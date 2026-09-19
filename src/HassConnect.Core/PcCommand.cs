@@ -2,7 +2,18 @@ using System.Text.Json;
 
 namespace HassConnect.Core;
 
-public enum PcCommandKind { Lock, MonitorSleep, Sleep, Media, VolumeMute, VolumeLevel, Custom }
+public enum PcCommandKind
+{
+    Lock = 0,
+    MonitorSleep = 1,
+    Sleep = 2,
+    Media = 3,
+    VolumeMute = 4,
+    VolumeLevel = 5,
+    Custom = 6,
+    Shutdown = 7,
+    Restart = 8
+}
 public enum MediaCommand { PlayPause, Next, Previous, Stop }
 
 public static class PcCommandIds
@@ -10,13 +21,15 @@ public static class PcCommandIds
     public const string Lock = "command_lock";
     public const string MonitorSleep = "command_monitor_sleep";
     public const string Sleep = "command_sleep";
+    public const string Shutdown = "command_shutdown";
+    public const string Restart = "command_restart";
     public const string Media = "command_media";
     public const string VolumeMute = "command_volume_mute";
     public const string VolumeLevel = "command_volume_level";
 
     public static IReadOnlyList<string> All { get; } =
     [
-        Lock, MonitorSleep, Sleep, Media, VolumeMute, VolumeLevel
+        Lock, MonitorSleep, Sleep, Shutdown, Restart, Media, VolumeMute, VolumeLevel
     ];
 
     public static bool IsKnown(string id) => All.Contains(id, StringComparer.Ordinal);
@@ -28,16 +41,21 @@ public sealed record PcCommand(
     int? VolumeLevel = null,
     string? CustomId = null)
 {
+    public bool RequiresDeferredExecution =>
+        Kind is PcCommandKind.Sleep or PcCommandKind.Shutdown or PcCommandKind.Restart;
+
     public string Id => Kind switch
     {
         PcCommandKind.Lock => PcCommandIds.Lock,
         PcCommandKind.MonitorSleep => PcCommandIds.MonitorSleep,
         PcCommandKind.Sleep => PcCommandIds.Sleep,
+        PcCommandKind.Shutdown => PcCommandIds.Shutdown,
+        PcCommandKind.Restart => PcCommandIds.Restart,
         PcCommandKind.Media => PcCommandIds.Media,
         PcCommandKind.VolumeMute => PcCommandIds.VolumeMute,
         PcCommandKind.VolumeLevel => PcCommandIds.VolumeLevel,
         PcCommandKind.Custom when CustomCommandPolicy.IsCustomCommandId(CustomId) => CustomId!,
-        _ => throw new ArgumentOutOfRangeException(nameof(Kind))
+        _ => throw new InvalidOperationException("The PC command kind is invalid.")
     };
 
     public static PcCommand? Parse(string message, JsonElement? data)
@@ -47,6 +65,8 @@ public sealed record PcCommand(
             PcCommandIds.Lock => new(PcCommandKind.Lock),
             PcCommandIds.MonitorSleep => new(PcCommandKind.MonitorSleep),
             PcCommandIds.Sleep => new(PcCommandKind.Sleep),
+            PcCommandIds.Shutdown => new(PcCommandKind.Shutdown),
+            PcCommandIds.Restart => new(PcCommandKind.Restart),
             PcCommandIds.Media => new(PcCommandKind.Media, ParseMedia(Text(data, "media_command"))),
             PcCommandIds.VolumeMute => new(PcCommandKind.VolumeMute),
             PcCommandIds.VolumeLevel => new(PcCommandKind.VolumeLevel, VolumeLevel: ParseVolume(data)),

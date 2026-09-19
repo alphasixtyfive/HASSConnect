@@ -65,7 +65,7 @@ Check every image before committing it:
   spacing, and data privacy.
 
 Failure of any check blocks publication. Do not try to repair damaged UI text by sharpening,
-upscaling, AI editing, or another lossy export; recapture it from the application.
+upscaling, automated editing, or another lossy export; recapture it from the application.
 
 ## Repository layout
 

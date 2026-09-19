@@ -13,6 +13,7 @@ internal static class WindowsPowerControl
     private const uint TokenAdjustPrivileges = 0x0020;
     private const uint PrivilegeEnabled = 0x0002;
     private const int ErrorNotAllAssigned = 1300;
+    private const uint ShutdownReasonPlanned = 0x80000000;
     private const string ShutdownPrivilegeName = "SeShutdownPrivilege";
     private static readonly nint BroadcastWindow = (nint)0xFFFF;
 
@@ -34,7 +35,18 @@ internal static class WindowsPowerControl
         if (!SetSuspendState(false, false, false)) throw LastError();
     }
 
-    private static IDisposable EnableShutdownPrivilege()
+    public static void Shutdown() => EndWindowsSession(restart: false);
+
+    public static void Restart() => EndWindowsSession(restart: true);
+
+    private static void EndWindowsSession(bool restart)
+    {
+        using var privilege = EnableShutdownPrivilege();
+        if (!InitiateSystemShutdownEx(null, null, 0, false, restart, ShutdownReasonPlanned))
+            throw LastError();
+    }
+
+    private static PrivilegeScope EnableShutdownPrivilege()
     {
         if (!OpenProcessToken(GetCurrentProcess(), TokenQuery | TokenAdjustPrivileges, out var token))
             throw LastError();
@@ -91,6 +103,12 @@ internal static class WindowsPowerControl
     private static extern bool AdjustTokenPrivileges(SafeAccessTokenHandle token,
         [MarshalAs(UnmanagedType.Bool)] bool disableAllPrivileges, ref TokenPrivileges newState,
         int bufferLength, out TokenPrivileges previousState, out int returnLength);
+
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool InitiateSystemShutdownEx(string? machineName, string? message,
+        uint timeout, [MarshalAs(UnmanagedType.Bool)] bool forceAppsClosed,
+        [MarshalAs(UnmanagedType.Bool)] bool rebootAfterShutdown, uint reason);
 
     [StructLayout(LayoutKind.Sequential)]
     private struct Luid

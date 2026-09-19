@@ -83,6 +83,11 @@ public sealed class CustomCommandTests
     }
 
     [Fact]
+    public void CollectionRejectsEmptyEntriesFromCorruptSettings() =>
+        Assert.Throws<InvalidDataException>(() =>
+            CustomCommandPolicy.ValidateCollection([null!]));
+
+    [Fact]
     public void NotificationParsesOnlyWellFormedCustomCommandName()
     {
         using var valid = JsonDocument.Parse("""{"message":"command_custom_open_notes","data":{"arguments":"ignored"}}""");

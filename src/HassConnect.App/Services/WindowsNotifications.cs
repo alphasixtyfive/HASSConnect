@@ -3,11 +3,11 @@ using Microsoft.Windows.AppNotifications;
 
 namespace HassConnect.App.Services;
 
-internal sealed class WindowsNotifications : IDisposable
+internal sealed partial class WindowsNotifications : IDisposable
 {
     private bool _registered;
 
-    public bool Supported => AppNotificationManager.IsSupported();
+    public static bool Supported => AppNotificationManager.IsSupported();
     public event Action<string>? Invoked;
 
     public void Register()
@@ -41,7 +41,8 @@ internal sealed class WindowsNotifications : IDisposable
         if (manager.Setting != AppNotificationSetting.Enabled)
             throw new InvalidOperationException("Allow notifications for HASS Connect in Windows Settings.");
         var toast = new AppNotification(NotificationToast.Create(message, sound, image, actions))
-        { ExpiresOnReboot = true, Expiration = DateTimeOffset.Now.AddHours(24) };
+        { ExpiresOnReboot = true };
+        if (!message.Persistent) toast.Expiration = DateTimeOffset.Now.AddHours(24);
         if (tag is not null) toast.Tag = tag;
         manager.Show(toast);
         if (toast.Id == 0) throw new InvalidOperationException("Windows could not display the notification.");

@@ -16,6 +16,15 @@ System disk readings describe the volume containing Windows. Free space is repor
 in decimal gigabytes and usage as a percentage. Battery sensors are unavailable on
 PCs where Windows reports no system battery.
 
+Each fixed disk appears once in HASS Connect with its used percentage and free space
+shown on the same row. Its single switch controls two Home Assistant entities: usage
+and free space. Their entity IDs include the drive letter, such as
+`sensor.desktop_d_disk_usage`. If an enabled drive is disconnected or otherwise
+becomes unreadable, HASS Connect keeps both entities and reports `unknown`; the
+missing drive does not stop other sensors from updating. Reporting resumes when a
+fixed disk is available under the same drive letter. Removable and network drives
+are not offered.
+
 ## Guard automations against stale readings
 
 Home Assistant retains the last CPU, idle and other readings when the PC sleeps,

@@ -8,7 +8,7 @@ public sealed class PcCommandTests
     [Fact]
     public void CommandIdentifiersAreUniqueAndComplete()
     {
-        Assert.Equal(6, PcCommandIds.All.Count);
+        Assert.Equal(8, PcCommandIds.All.Count);
         Assert.Equal(PcCommandIds.All.Count, PcCommandIds.All.Distinct(StringComparer.Ordinal).Count());
         Assert.All(PcCommandIds.All, id => Assert.True(PcCommandIds.IsKnown(id)));
     }
@@ -17,6 +17,8 @@ public sealed class PcCommandTests
     [InlineData("command_lock", PcCommandKind.Lock)]
     [InlineData("command_monitor_sleep", PcCommandKind.MonitorSleep)]
     [InlineData("command_sleep", PcCommandKind.Sleep)]
+    [InlineData("command_shutdown", PcCommandKind.Shutdown)]
+    [InlineData("command_restart", PcCommandKind.Restart)]
     [InlineData("command_volume_mute", PcCommandKind.VolumeMute)]
     public void ParsesSimpleCommands(string message, PcCommandKind kind)
     {
@@ -68,6 +70,15 @@ public sealed class PcCommandTests
         using var json = JsonDocument.Parse("""{"message":"Hello"}""");
         Assert.Null(NotificationMessage.Parse(json.RootElement).Command);
     }
+
+    [Theory]
+    [InlineData(PcCommandKind.Lock, false)]
+    [InlineData(PcCommandKind.Media, false)]
+    [InlineData(PcCommandKind.Sleep, true)]
+    [InlineData(PcCommandKind.Shutdown, true)]
+    [InlineData(PcCommandKind.Restart, true)]
+    public void DefersOnlyCommandsThatCanInterruptDelivery(PcCommandKind kind, bool expected) =>
+        Assert.Equal(expected, new PcCommand(kind).RequiresDeferredExecution);
 
     [Fact]
     public void ParsesCustomCommandWithoutAcceptingRemoteArguments()

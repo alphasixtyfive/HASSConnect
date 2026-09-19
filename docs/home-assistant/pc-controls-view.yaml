@@ -49,6 +49,28 @@
             data:
               message: command_sleep
 
+        - type: button
+          name: Shut down PC
+          icon: mdi:power
+          tap_action:
+            action: perform-action
+            perform_action: notify.mobile_app_your_pc
+            confirmation:
+              text: Shut down this PC?
+            data:
+              message: command_shutdown
+
+        - type: button
+          name: Restart PC
+          icon: mdi:restart
+          tap_action:
+            action: perform-action
+            perform_action: notify.mobile_app_your_pc
+            confirmation:
+              text: Restart this PC?
+            data:
+              message: command_restart
+
     - type: grid
       title: Media
       columns: 2

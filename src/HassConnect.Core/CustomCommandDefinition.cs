@@ -8,7 +8,7 @@ public sealed record CustomCommandDefinition(
     string Id,
     string Name,
     string ExecutablePath,
-    List<string> Arguments,
+    IReadOnlyList<string> Arguments,
     bool Enabled = true);
 
 public static partial class CustomCommandPolicy
@@ -82,6 +82,8 @@ public static partial class CustomCommandPolicy
         var ids = new HashSet<string>(StringComparer.Ordinal);
         foreach (var command in source)
         {
+            if (command is null)
+                throw new InvalidDataException("Custom command configuration contains an empty entry.");
             CustomCommandDefinition validated;
             try
             {
@@ -101,6 +103,7 @@ public static partial class CustomCommandPolicy
 
     public static ProcessStartInfo CreateStartInfo(CustomCommandDefinition command)
     {
+        ArgumentNullException.ThrowIfNull(command);
         var validated = Create(command.Id, command.Name, command.ExecutablePath, command.Arguments,
             command.Enabled, requireExecutable: true);
         var start = new ProcessStartInfo(validated.ExecutablePath)

@@ -14,6 +14,15 @@ internal static class WindowsSensors
     public static IReadOnlyList<SensorDefinition> Available { get; } = SensorDefinition.Available
         .Where(sensor => PowerSensors.IsSupported(sensor.Id)).ToArray();
 
+    public static IReadOnlyList<SensorDefinition> AvailableFor(Settings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        var letters = StorageSensors.AvailableDriveLetters().ToHashSet();
+        foreach (var id in settings.EnabledSensors)
+            if (DriveSensor.TryParse(id, out var letter, out _)) letters.Add(letter);
+        return Available.Concat(letters.Order().SelectMany(DriveSensor.Create)).ToArray();
+    }
+
     public static SensorReading Read(string id) => id switch
     {
         "uptime" => new(id, Environment.TickCount64 / 1000),
@@ -25,6 +34,7 @@ internal static class WindowsSensors
         "disk_usage" or "disk_free_space" => new(id, StorageSensors.Read(id)),
         "microphone_in_use" or "webcam_in_use" => new(id, DeviceActivitySensors.Read(id)),
         "ip_address" or "network_adapter" or "download_speed" or "upload_speed" => new(id, NetworkSensors.Read(id)),
+        _ when DriveSensor.TryParse(id, out _, out _) => new(id, StorageSensors.Read(id)),
         _ => throw new ArgumentOutOfRangeException(nameof(id))
     };
 

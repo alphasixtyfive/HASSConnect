@@ -65,7 +65,8 @@ internal sealed class HaWebSocket : IAsyncDisposable
         while (true)
         {
             var message = await ReadAsync(ct);
-            if (MessageType(message) != "result" || !message.TryGetProperty("id", out var messageId) || messageId.GetInt32() != id)
+            if (MessageType(message) != "result" || !message.TryGetProperty("id", out var messageId) ||
+                !messageId.TryGetInt32(out var resultId) || resultId != id)
                 continue;
             if (!message.TryGetProperty("success", out var success) || success.ValueKind != JsonValueKind.True)
                 throw new InvalidDataException("Home Assistant rejected a WebSocket request.");

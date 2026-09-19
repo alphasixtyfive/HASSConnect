@@ -2,7 +2,7 @@ using System.Text.Json;
 
 namespace HassConnect.Core;
 
-public sealed record NotificationAction(string Id, string Title, string? Uri = null);
+public sealed record NotificationAction(string Id, string Title, string? Link = null);
 
 public sealed record NotificationMessage(string? Title, string Message, string? Image,
     IReadOnlyList<NotificationAction> Actions, string? ConfirmationId)
@@ -10,6 +10,7 @@ public sealed record NotificationMessage(string? Title, string Message, string? 
     public string? Tag { get; init; }
     public JsonElement? ActionData { get; init; }
     public string NotificationId { get; init; } = Guid.NewGuid().ToString("N");
+    public bool Persistent { get; init; }
     public bool IsClear => Message == "clear_notification";
     public PcCommand? Command { get; init; }
 
@@ -21,6 +22,7 @@ public sealed record NotificationMessage(string? Title, string Message, string? 
         var actions = new List<NotificationAction>();
         string? image = null;
         string? tag = null;
+        var persistent = false;
         JsonElement? actionData = null;
         JsonElement? commandData = null;
         if (payload.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.Object)
@@ -29,6 +31,8 @@ public sealed record NotificationMessage(string? Title, string Message, string? 
             tag = Text(data, "tag", int.MaxValue);
             if (tag?.Length > 256) throw new InvalidDataException("Notification tag exceeds 256 characters.");
             if (string.IsNullOrWhiteSpace(tag)) tag = null;
+            persistent = data.TryGetProperty("persistent", out var persistentValue) &&
+                persistentValue.ValueKind == JsonValueKind.True;
             if (data.TryGetProperty("action_data", out var context) && context.ValueKind == JsonValueKind.Object)
                 actionData = context.Clone();
             image = Text(data, "image", 2048);
@@ -47,7 +51,12 @@ public sealed record NotificationMessage(string? Title, string Message, string? 
         if (message == "clear_notification" && tag is null)
             throw new InvalidDataException("Clearing a notification requires a tag.");
         return new(title, message, image, actions, ReadConfirmationId(payload))
-        { Tag = tag, ActionData = actionData, Command = PcCommand.Parse(message, commandData) };
+        {
+            Tag = tag,
+            ActionData = actionData,
+            Command = PcCommand.Parse(message, commandData),
+            Persistent = persistent
+        };
     }
 
     public static string? ReadConfirmationId(JsonElement payload) => Text(payload, "hass_confirm_id", 256);

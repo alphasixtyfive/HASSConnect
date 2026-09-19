@@ -8,6 +8,8 @@ public static class NotificationToast
     public static string Create(NotificationMessage message, bool sound, string? localImage,
         IReadOnlyList<(string Title, string Argument)> actions)
     {
+        ArgumentNullException.ThrowIfNull(message);
+        ArgumentNullException.ThrowIfNull(actions);
         var binding = new XElement("binding", new XAttribute("template", "ToastGeneric"));
         if (!string.IsNullOrWhiteSpace(message.Title))
             binding.Add(new XElement("text", Clean(message.Title)));
@@ -15,6 +17,11 @@ public static class NotificationToast
         if (localImage is not null)
             binding.Add(new XElement("image", new XAttribute("placement", "hero"), new XAttribute("src", localImage)));
         var toast = new XElement("toast", new XAttribute("launch", "open"), new XElement("visual", binding));
+        if (message.Persistent)
+        {
+            toast.Add(new XAttribute("duration", "long"));
+            toast.Add(new XAttribute("scenario", "reminder"));
+        }
         if (!sound) toast.Add(new XElement("audio", new XAttribute("silent", "true")));
         if (actions.Count > 0)
             toast.Add(new XElement("actions", actions.Select(action => new XElement("action",

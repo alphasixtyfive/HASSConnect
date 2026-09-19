@@ -4,9 +4,9 @@ namespace HassConnect.HomeAssistant;
 
 public sealed record HomeAssistantDashboard(string Title, string Path);
 
-public sealed class DashboardCatalog
+public static class DashboardCatalog
 {
-    public async Task<IReadOnlyList<HomeAssistantDashboard>> GetAsync(Uri server, string token, CancellationToken ct)
+    public static async Task<IReadOnlyList<HomeAssistantDashboard>> GetAsync(Uri server, string token, CancellationToken ct)
     {
         await using var socket = await HaWebSocket.ConnectAsync(server, token, ct);
         var dashboards = new Dictionary<string, HomeAssistantDashboard>(StringComparer.OrdinalIgnoreCase);

@@ -22,6 +22,22 @@ data:
 
 The actual action name follows the registered device name. Look in the Actions tab of Developer Tools if it differs.
 
+For an alert that should remain prominent until it is dismissed, add
+`persistent: true`. HASS Connect uses Windows' reminder presentation and does not
+apply its normal 24-hour expiry:
+
+```yaml
+action: notify.mobile_app_desktop
+data:
+  title: Oven
+  message: Check the oven.
+  data:
+    persistent: true
+```
+
+Windows notification settings and Focus still have final control over how the
+alert appears. Closing HASS Connect or restarting the app or Windows clears it.
+
 ## Images and action buttons
 
 Images and action buttons are supported automatically when included in a message:

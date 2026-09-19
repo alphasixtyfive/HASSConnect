@@ -3,9 +3,9 @@ using HassConnect.Core;
 
 namespace HassConnect.HomeAssistant;
 
-public sealed class NotificationChannel
+public static class NotificationChannel
 {
-    public async Task ReceiveAsync(Uri server, Credentials credentials, Func<NotificationMessage, CancellationToken, Task> deliver,
+    public static async Task ReceiveAsync(Uri server, Credentials credentials, Func<NotificationMessage, CancellationToken, Task> deliver,
         Action connected, Action<Exception> rejected, CancellationToken ct)
     {
         await using var socket = await HaWebSocket.ConnectAsync(server, credentials.AccessToken, ct);
@@ -18,8 +18,11 @@ public sealed class NotificationChannel
         while (!ct.IsCancellationRequested)
         {
             var packet = await socket.ReadAsync(ct);
-            if (Type(packet) != "event" || !packet.TryGetProperty("id", out var id) || id.GetInt32() != 1) continue;
-            await ProcessEventAsync(packet.GetProperty("event"), deliver, rejected,
+            if (Type(packet) != "event" || !packet.TryGetProperty("id", out var id) ||
+                !id.TryGetInt32(out var channelId) || channelId != 1 ||
+                !packet.TryGetProperty("event", out var payload) || payload.ValueKind != JsonValueKind.Object)
+                continue;
+            await ProcessEventAsync(payload, deliver, rejected,
                 confirmation => socket.SendAsync(new
                 {
                     id = ++sequence,

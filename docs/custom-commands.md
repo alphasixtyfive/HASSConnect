@@ -82,5 +82,5 @@ requires confirmation.
 - Rapid repeated triggers are intentionally rate-limited; wait before testing again.
 - Open **Settings > Diagnostic logs** for validation, launch and connection failures.
 
-Built-in lock, display, sleep, media and volume messages are documented in the
+Built-in lock, display, sleep, shutdown, restart, media and volume messages are documented in the
 [PC command reference](commands.md).

@@ -38,7 +38,7 @@ internal sealed class NotificationService : IAsyncDisposable
     }
 
     public event Action? Changed;
-    public bool Supported => _windows.Supported;
+    public bool Supported => WindowsNotifications.Supported;
     public bool Connected { get; private set; }
     public string Status { get; private set; } = "Off";
 
@@ -114,7 +114,7 @@ internal sealed class NotificationService : IAsyncDisposable
             {
                 SetStatus("Connecting…", false);
                 using var client = new HaClient(ServerAddress.Parse(settings.ServerUrl), credentials.AccessToken);
-                await new NotificationChannel().ReceiveAsync(ServerAddress.Parse(settings.ServerUrl), credentials,
+                await NotificationChannel.ReceiveAsync(ServerAddress.Parse(settings.ServerUrl), credentials,
                     DeliverAsync, () => { failures = 0; SetStatus("Connected", true); },
                     ex => AppLog.Write("Remote message", ex.GetType().Name), ct);
             }
@@ -159,7 +159,7 @@ internal sealed class NotificationService : IAsyncDisposable
             {
                 // Give Home Assistant time to receive its delivery confirmation before
                 // the network connection is suspended with the PC.
-                if (command.Kind == PcCommandKind.Sleep) QueueDeferredCommand(command);
+                if (command.RequiresDeferredExecution) QueueDeferredCommand(command);
                 else ExecutePcCommand(command);
             }
             else AppLog.Write("PC control", "Ignored while disabled");
@@ -198,9 +198,9 @@ internal sealed class NotificationService : IAsyncDisposable
             if (_actions.Count >= 100) break;
             var key = Guid.NewGuid().ToString("N");
             Uri? link = null;
-            if (action.Uri is not null)
+            if (action.Link is not null)
             {
-                try { link = NotificationLink.Resolve(ServerAddress.Parse(settings.ServerUrl), action.Uri); }
+                try { link = NotificationLink.Resolve(ServerAddress.Parse(settings.ServerUrl), action.Link); }
                 catch (InvalidDataException) { AppLog.Write("Notification link", "Unsupported URL"); continue; }
             }
             _actions[key] = new(action.Id, settings, credentials, DateTimeOffset.UtcNow, message, link);

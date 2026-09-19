@@ -9,6 +9,9 @@ public sealed record SensorSyncPlan(
     public static SensorSyncPlan Create(Settings settings, IReadOnlyList<SensorDefinition> supported,
         IReadOnlyDictionary<string, bool> remoteEnabled)
     {
+        ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(supported);
+        ArgumentNullException.ThrowIfNull(remoteEnabled);
         var enabled = new HashSet<string>(StringComparer.Ordinal);
         var readings = new List<SensorDefinition>();
         var registrations = new HashSet<string>(StringComparer.Ordinal);

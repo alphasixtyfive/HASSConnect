@@ -123,7 +123,8 @@ internal sealed class SensorSession : IAsyncDisposable
         try
         {
             if (Paused) throw new InvalidOperationException("Turn on Enable sensors before changing individual sensors.");
-            var definition = WindowsSensors.Available.Single(s => s.Id == id);
+            var definition = AvailableSensors().SingleOrDefault(sensor => sensor.Id == id)
+                ?? throw new InvalidOperationException("That sensor is no longer available on this PC.");
             if (_client is not null && _credentials?.WebhookId is { } webhook)
             {
                 if (enabled && NetworkSensors.Supports(id))
@@ -146,6 +147,45 @@ internal sealed class SensorSession : IAsyncDisposable
         finally { _gate.Release(); }
     }
 
+    public async Task SetDriveSensorsEnabledAsync(IReadOnlyCollection<string> ids, bool enabled)
+    {
+        ArgumentNullException.ThrowIfNull(ids);
+        var selectedIds = ids.Distinct(StringComparer.Ordinal).ToArray();
+        if (!DriveSensor.IsPair(selectedIds))
+            throw new ArgumentException("A drive selection must contain its usage and free-space sensors.", nameof(ids));
+
+        await _gate.WaitAsync(_lifetime.Token);
+        try
+        {
+            if (Paused) throw new InvalidOperationException("Turn on Enable sensors before changing individual sensors.");
+            var available = AvailableSensors().ToDictionary(sensor => sensor.Id, StringComparer.Ordinal);
+            if (selectedIds.Any(id => !available.ContainsKey(id)))
+                throw new InvalidOperationException("That drive is no longer available on this PC.");
+
+            if (_client is not null && _credentials?.WebhookId is { } webhook)
+                foreach (var id in selectedIds)
+                {
+                    var definition = available[id];
+                    var value = enabled ? ReadSensor(id).Value : _values.GetValueOrDefault(id, "unknown");
+                    await _client.RegisterSensorAsync(webhook, definition, value, enabled, _lifetime.Token);
+                }
+
+            var sensors = new HashSet<string>(_settings.EnabledSensors);
+            foreach (var id in selectedIds)
+                if (enabled) sensors.Add(id); else sensors.Remove(id);
+            SaveSettings(_settings with { EnabledSensors = sensors });
+            if (!enabled)
+                foreach (var id in selectedIds)
+                {
+                    _values.Remove(id);
+                    ResetSensor(id);
+                }
+            if (_client is not null) await PublishAsync(_lifetime.Token);
+            Changed?.Invoke();
+        }
+        finally { _gate.Release(); }
+    }
+
     public async Task SetPausedAsync(bool paused)
     {
         await _gate.WaitAsync(_lifetime.Token);
@@ -153,7 +193,7 @@ internal sealed class SensorSession : IAsyncDisposable
         {
             SaveSettings(_settings with { ShareSensors = !paused });
             if (paused)
-                foreach (var sensor in WindowsSensors.Available) ResetSensor(sensor.Id);
+                foreach (var sensor in AvailableSensors()) ResetSensor(sensor.Id);
             if (_client is not null) await PublishAsync(_lifetime.Token);
             Changed?.Invoke();
         }
@@ -174,7 +214,7 @@ internal sealed class SensorSession : IAsyncDisposable
         {
             if (_credentials is null || string.IsNullOrWhiteSpace(_settings.ServerUrl))
                 throw new InvalidOperationException("Connect to Home Assistant first.");
-            return await new DashboardCatalog().GetAsync(ServerAddress.Parse(_settings.ServerUrl),
+            return await DashboardCatalog.GetAsync(ServerAddress.Parse(_settings.ServerUrl),
                 _credentials.AccessToken, _lifetime.Token);
         }
         finally { _gate.Release(); }
@@ -362,7 +402,8 @@ internal sealed class SensorSession : IAsyncDisposable
     {
         if (_client is null || _credentials?.WebhookId is not { } webhook) return;
         var configuration = await _client.WebhookAsync(webhook, "get_config", new { }, ct);
-        var plan = SensorSyncPlan.Create(_settings, WindowsSensors.Available, ReadRemoteChoices(configuration));
+        var supported = AvailableSensors();
+        var plan = SensorSyncPlan.Create(_settings, supported, ReadRemoteChoices(configuration));
         if (!plan.EnabledIds.SetEquals(_settings.EnabledSensors))
         {
             var disabled = _settings.EnabledSensors.Except(plan.EnabledIds).ToArray();
@@ -389,7 +430,8 @@ internal sealed class SensorSession : IAsyncDisposable
         }
         if (readings.Length > 0)
         {
-            var results = await _client.UpdateSensorsAsync(webhook, readings, ct);
+            var definitions = supported.ToDictionary(sensor => sensor.Id, StringComparer.Ordinal);
+            var results = await _client.UpdateSensorsAsync(webhook, readings, definitions, ct);
             foreach (var reading in readings)
             {
                 if (results.ValueKind != JsonValueKind.Object ||
@@ -422,11 +464,11 @@ internal sealed class SensorSession : IAsyncDisposable
             // make a healthy Home Assistant connection appear disconnected.
             if (_sensorErrors.Add(id)) AppLog.Write($"Read sensor {id}", ex.GetType().Name);
             ResetSensor(id);
-            return new(id, WindowsSensors.Available.Single(sensor => sensor.Id == id).Type == "binary_sensor" ? null : "unknown");
+            return new(id, AvailableSensors().Single(sensor => sensor.Id == id).Type == "binary_sensor" ? null : "unknown");
         }
     }
 
-    private static IReadOnlyDictionary<string, bool> ReadRemoteChoices(JsonElement configuration)
+    private static Dictionary<string, bool> ReadRemoteChoices(JsonElement configuration)
     {
         var choices = new Dictionary<string, bool>(StringComparer.Ordinal);
         if (!configuration.TryGetProperty("entities", out var entities) || entities.ValueKind != JsonValueKind.Object)
@@ -445,6 +487,8 @@ internal sealed class SensorSession : IAsyncDisposable
         _store.Save(settings);
         _settings = settings;
     }
+
+    private IReadOnlyList<SensorDefinition> AvailableSensors() => WindowsSensors.AvailableFor(_settings);
 
     private void ResetSensor(string id)
     {

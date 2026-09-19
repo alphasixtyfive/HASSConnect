@@ -16,6 +16,8 @@ for your HASS Connect device.
 | Lock PC | `command_lock` | None |
 | Turn off displays | `command_monitor_sleep` | None |
 | Sleep PC | `command_sleep` | None |
+| Shut down PC | `command_shutdown` | None |
+| Restart PC | `command_restart` | None |
 | Media playback | `command_media` | `media_command`: `play_pause`, `next`, `previous`, or `stop` |
 | Mute or unmute | `command_volume_mute` | None |
 | Set volume | `command_volume_level` | `volume_level`: whole number from 0 through 100 |
@@ -73,8 +75,8 @@ troubleshooting.
 - Only local absolute executable paths are accepted; UNC paths, relative paths and non-`.exe` targets are rejected.
 - A custom command can start at most once every five seconds, with a global limit of ten starts per minute.
 - Disabled commands are ignored and recorded in the local diagnostic log.
-- Sleep is delayed briefly so Home Assistant can receive its delivery confirmation
-  before the network connection is suspended.
+- Sleep, shutdown and restart are delayed briefly so Home Assistant can receive the delivery
+  confirmation before the network connection is suspended.
 - Every received command is acknowledged even if its payload is invalid or Windows
   rejects the action. The failure is logged, the receiver remains connected, and the
   next command is processed normally.
@@ -89,6 +91,8 @@ HASS Connect targets Windows 11 x64 and uses documented Windows APIs:
   non-responsive window.
 - Sleep enables `SeShutdownPrivilege` only around `SetSuspendState`, then restores
   the process token's previous privilege state.
+- Shutdown and restart briefly enable `SeShutdownPrivilege` and request a planned,
+  graceful Windows session end without forcing applications closed.
 - Media and mute use correctly sized native `INPUT` structures with `SendInput`.
 - Volume uses Core Audio and updates the default Console and Multimedia render roles.
 

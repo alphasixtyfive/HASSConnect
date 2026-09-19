@@ -57,4 +57,18 @@ public sealed class NotificationToastTests
         Assert.NotEqual(actions[0].Attribute("arguments")?.Value, actions[1].Attribute("arguments")?.Value);
         Assert.All(actions, action => Assert.True(Guid.TryParseExact(action.Attribute("arguments")!.Value, "N", out _)));
     }
+
+    [Fact]
+    public void PersistentNotificationsUseTheWindowsReminderScenario()
+    {
+        var message = new NotificationMessage("Reminder", "Check the oven", null, [], null)
+        {
+            Persistent = true
+        };
+
+        var toast = XDocument.Parse(NotificationToast.Create(message, true, null, []));
+
+        Assert.Equal("long", toast.Root!.Attribute("duration")?.Value);
+        Assert.Equal("reminder", toast.Root.Attribute("scenario")?.Value);
+    }
 }

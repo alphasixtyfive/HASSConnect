@@ -62,6 +62,7 @@ public sealed partial class MainWindow : Window
             ThemeBox.SelectedItem = _session.Settings.Theme;
             ApplyTheme(_session.Settings.Theme);
             SensorsPage.SensorChanged += Sensor_Changed;
+            SensorsPage.DriveSensorsChanged += DriveSensors_Changed;
             SensorsPage.SharingChanged += Reporting_Changed;
             NotificationsPage.EnabledChanged += Notifications_Changed;
             NotificationsPage.SoundChanged += NotificationSound_Changed;
@@ -328,6 +329,19 @@ public sealed partial class MainWindow : Window
         finally
         {
             SensorsPage.SetSensorBusy(id, false);
+            Refresh();
+        }
+    }
+
+    private async void DriveSensors_Changed(string key, IReadOnlyList<string> ids, bool enabled)
+    {
+        if (_session is null) return;
+        SensorsPage.SetSensorBusy(key, true);
+        try { await _session.SetDriveSensorsEnabledAsync(ids, enabled); }
+        catch (Exception ex) { ShowError(UserMessage(ex)); }
+        finally
+        {
+            SensorsPage.SetSensorBusy(key, false);
             Refresh();
         }
     }

@@ -17,6 +17,12 @@ internal sealed class WindowsPcControl : IPcCommandExecutor
             case PcCommandKind.Sleep:
                 WindowsPowerControl.Sleep();
                 break;
+            case PcCommandKind.Shutdown:
+                WindowsPowerControl.Shutdown();
+                break;
+            case PcCommandKind.Restart:
+                WindowsPowerControl.Restart();
+                break;
             case PcCommandKind.Media:
                 WindowsAudioControl.SendMediaCommand(command.Media ??
                     throw new InvalidDataException("The media command is missing."));

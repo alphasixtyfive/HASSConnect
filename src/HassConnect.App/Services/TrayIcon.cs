@@ -13,6 +13,7 @@ internal sealed class TrayIcon : IDisposable
     private readonly SubclassProc _callback;
     private readonly uint _taskbarCreated;
     private NotifyIconData _data;
+    private bool _disposed;
 
     public TrayIcon(nint window, Action open, Action quit, Action openHomeAssistant)
     {
@@ -21,14 +22,31 @@ internal sealed class TrayIcon : IDisposable
         _callback = WindowProc;
         _taskbarCreated = RegisterWindowMessage("TaskbarCreated");
         if (!SetWindowSubclass(window, _callback, 1, 0)) throw new InvalidOperationException("Unable to attach the tray icon.");
-        var icon = LoadImage(0, Path.Combine(AppContext.BaseDirectory, "Assets", "app.ico"), 1, 32, 32, 0x10);
-        _data = new NotifyIconData
+        try
         {
-            Size = (uint)Marshal.SizeOf<NotifyIconData>(), Window = window, Id = 1,
-            Flags = 1 | 2 | 4, CallbackMessage = CallbackMessage,
-            Icon = icon, Tip = "HASS Connect", Info = "", InfoTitle = ""
-        };
-        Shell_NotifyIcon(0, ref _data);
+            var icon = LoadImage(0, Path.Combine(AppContext.BaseDirectory, "Assets", "app.ico"), 1, 32, 32, 0x10);
+            if (icon == 0) throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+            _data = new NotifyIconData
+            {
+                Size = (uint)Marshal.SizeOf<NotifyIconData>(),
+                Window = window,
+                Id = 1,
+                Flags = 1 | 2 | 4,
+                CallbackMessage = CallbackMessage,
+                Icon = icon,
+                Tip = "HASS Connect",
+                Info = "",
+                InfoTitle = ""
+            };
+            if (!Shell_NotifyIcon(0, ref _data))
+                throw new InvalidOperationException("Windows could not create the notification-area icon.");
+        }
+        catch
+        {
+            RemoveWindowSubclass(_window, _callback, 1);
+            if (_data.Icon != 0) DestroyIcon(_data.Icon);
+            throw;
+        }
     }
 
     public void SetStatus(string status)
@@ -68,9 +86,12 @@ internal sealed class TrayIcon : IDisposable
 
     public void Dispose()
     {
+        if (_disposed) return;
+        _disposed = true;
         Shell_NotifyIcon(2, ref _data);
         RemoveWindowSubclass(_window, _callback, 1);
         if (_data.Icon != 0) DestroyIcon(_data.Icon);
+        _data.Icon = 0;
     }
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
@@ -90,7 +111,7 @@ internal sealed class TrayIcon : IDisposable
     [DllImport("comctl32.dll")] private static extern bool RemoveWindowSubclass(nint hwnd, SubclassProc callback, nuint id);
     [DllImport("comctl32.dll")] private static extern nint DefSubclassProc(nint hwnd, uint message, nint wParam, nint lParam);
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)] private static extern bool Shell_NotifyIcon(uint message, ref NotifyIconData data);
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern nint LoadImage(nint instance, string name, uint type, int cx, int cy, uint flags);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)] private static extern nint LoadImage(nint instance, string name, uint type, int cx, int cy, uint flags);
     [DllImport("user32.dll")] private static extern bool DestroyIcon(nint icon);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern uint RegisterWindowMessage(string name);
     [DllImport("user32.dll")] private static extern bool GetCursorPos(out Point point);

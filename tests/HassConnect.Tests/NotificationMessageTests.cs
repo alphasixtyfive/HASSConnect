@@ -44,6 +44,17 @@ public sealed class NotificationMessageTests
         Assert.Null(message.Image);
         Assert.Null(message.ConfirmationId);
         Assert.Empty(message.Actions);
+        Assert.False(message.Persistent);
+    }
+
+    [Fact]
+    public void ReadsOnlyAnExplicitPersistentFlag()
+    {
+        using var persistent = JsonDocument.Parse("""{"message":"Check the oven","data":{"persistent":true}}""");
+        using var text = JsonDocument.Parse("""{"message":"Check the oven","data":{"persistent":"true"}}""");
+
+        Assert.True(NotificationMessage.Parse(persistent.RootElement).Persistent);
+        Assert.False(NotificationMessage.Parse(text.RootElement).Persistent);
     }
 
     [Fact]

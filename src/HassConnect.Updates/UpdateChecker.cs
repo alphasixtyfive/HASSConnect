@@ -14,13 +14,13 @@ public sealed record UpdateResult(
     UpdatePackage? Package = null);
 
 /// <summary>Checks published stable GitHub releases without downloading or executing installers.</summary>
-public sealed class UpdateChecker(HttpClient client)
+public sealed partial class UpdateChecker(HttpClient client)
 {
     public async Task<UpdateResult> CheckAsync(string? repository, string currentVersion, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(repository))
             return new(UpdateState.NotConfigured, "Updates aren’t configured yet.");
-        if (!Regex.IsMatch(repository, @"\A[A-Za-z0-9_-]+/[A-Za-z0-9_.-]+\z") ||
+        if (!RepositoryNamePattern().IsMatch(repository) ||
             !ReleaseVersion.TryParse(currentVersion, out var current))
             return new(UpdateState.Unavailable, "The update configuration is invalid.");
 
@@ -119,4 +119,6 @@ public sealed class UpdateChecker(HttpClient client)
             string.IsNullOrEmpty(uri.Query) && string.IsNullOrEmpty(uri.Fragment);
     }
 
+    [GeneratedRegex(@"\A[A-Za-z0-9_-]+/[A-Za-z0-9_.-]+\z")]
+    private static partial Regex RepositoryNamePattern();
 }

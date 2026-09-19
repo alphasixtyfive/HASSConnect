@@ -4,6 +4,7 @@ public static class ServerAddress
 {
     public static Uri Parse(string text)
     {
+        ArgumentNullException.ThrowIfNull(text);
         if (!Uri.TryCreate(text.Trim(), UriKind.Absolute, out var uri) ||
             uri.Scheme is not ("https" or "http") ||
             !string.IsNullOrEmpty(uri.UserInfo) || !string.IsNullOrEmpty(uri.Query) ||
@@ -12,5 +13,10 @@ public static class ServerAddress
         return uri;
     }
 
-    public static bool SameOrigin(Uri a, Uri b) => a.Scheme == b.Scheme && a.Host == b.Host && a.Port == b.Port;
+    public static bool SameOrigin(Uri a, Uri b)
+    {
+        ArgumentNullException.ThrowIfNull(a);
+        ArgumentNullException.ThrowIfNull(b);
+        return a.Scheme == b.Scheme && a.Host == b.Host && a.Port == b.Port;
+    }
 }

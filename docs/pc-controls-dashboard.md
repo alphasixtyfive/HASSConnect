@@ -23,9 +23,9 @@ views:
 
 Before testing, keep HASS Connect running and connected. In its **Controls** page,
 turn on **Enable PC control** and enable the individual commands you intend to use.
-Lock, display-off and sleep buttons ask for confirmation because they interrupt the
-current Windows session. Volume uses fixed test levels so the view remains portable
-and does not require an `input_number` helper or templated script.
+Lock, display-off, sleep, shutdown and restart buttons ask for confirmation because they
+interrupt the current Windows session. Volume uses fixed test levels so the view remains
+portable and does not require an `input_number` helper or templated script.
 
 The placeholder notify action is intentionally repeated in the view: this makes each
 button self-contained and easy to copy into another dashboard later.

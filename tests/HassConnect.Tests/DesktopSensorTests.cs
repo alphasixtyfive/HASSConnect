@@ -45,4 +45,33 @@ public sealed class DesktopSensorTests
             Assert.False(string.IsNullOrWhiteSpace(sensor.OffText));
         });
     }
+
+    [Theory]
+    [InlineData("disk_d_usage", 'd', false)]
+    [InlineData("disk_z_free_space", 'z', true)]
+    public void SelectedDriveSensorIdentifiersRoundTrip(string id, char letter, bool freeSpace)
+    {
+        Assert.True(DriveSensor.TryParse(id, out var parsedLetter, out var parsedFreeSpace));
+        Assert.Equal(letter, parsedLetter);
+        Assert.Equal(freeSpace, parsedFreeSpace);
+        Assert.Contains(DriveSensor.Create(letter), sensor => sensor.Id == id);
+    }
+
+    [Theory]
+    [InlineData("disk_usage")]
+    [InlineData("disk_D_usage")]
+    [InlineData("disk_dd_usage")]
+    [InlineData("disk_d_temperature")]
+    [InlineData(null)]
+    public void RejectsInvalidSelectedDriveSensorIdentifiers(string? id) =>
+        Assert.False(DriveSensor.TryParse(id, out _, out _));
+
+    [Fact]
+    public void RecognizesOnlyCompleteDriveSensorPairs()
+    {
+        Assert.True(DriveSensor.IsPair(["disk_usage", "disk_free_space"]));
+        Assert.True(DriveSensor.IsPair(["disk_d_free_space", "disk_d_usage"]));
+        Assert.False(DriveSensor.IsPair(["disk_d_usage", "disk_e_free_space"]));
+        Assert.False(DriveSensor.IsPair(["disk_d_usage"]));
+    }
 }

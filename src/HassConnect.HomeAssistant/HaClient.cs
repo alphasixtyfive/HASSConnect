@@ -77,28 +77,42 @@ public sealed class HaClient : IDisposable
     public Task<JsonElement> RegisterSensorAsync(string webhook, SensorDefinition sensor, object? state, bool enabled, CancellationToken ct) =>
         WebhookAsync(webhook, "register_sensor", new SensorPayload(sensor.Id, sensor.Type, state)
         {
-            Name = sensor.Name, Icon = sensor.Icon, Unit = sensor.Unit,
-            DeviceClass = sensor.DeviceClass, Disabled = !enabled
+            Name = sensor.Name,
+            Icon = sensor.Icon,
+            Unit = sensor.Unit,
+            DeviceClass = sensor.DeviceClass,
+            Disabled = !enabled
         }, ct);
 
     public Task<JsonElement> UpdateSensorsAsync(string webhook, IEnumerable<SensorReading> readings, CancellationToken ct) =>
+        UpdateSensorsAsync(webhook, readings,
+            SensorDefinition.Available.ToDictionary(sensor => sensor.Id, StringComparer.Ordinal), ct);
+
+    public Task<JsonElement> UpdateSensorsAsync(string webhook, IEnumerable<SensorReading> readings,
+        IReadOnlyDictionary<string, SensorDefinition> definitions, CancellationToken ct) =>
         WebhookAsync(webhook, "update_sensor_states", readings.Select(reading =>
         {
-            var sensor = SensorDefinition.Available.Single(sensor => sensor.Id == reading.Id);
+            if (!definitions.TryGetValue(reading.Id, out var sensor))
+                throw new InvalidOperationException($"Sensor definition is missing for {reading.Id}.");
             return new SensorPayload(reading.Id, sensor.Type, reading.Value) { Icon = sensor.Icon };
         }), ct);
 
     public Task<JsonElement> SetNotificationCapabilityAsync(string webhook, Settings settings, bool enabled, CancellationToken ct) =>
         WebhookAsync(webhook, "update_registration", new
         {
-            app_version = ProductInfo.Version, device_name = settings.DeviceName, manufacturer = "Microsoft", model = "Windows PC",
-            os_version = Environment.OSVersion.Version.ToString(), app_data = new { push_websocket_channel = enabled }
+            app_version = ProductInfo.Version,
+            device_name = settings.DeviceName,
+            manufacturer = "Microsoft",
+            model = "Windows PC",
+            os_version = Environment.OSVersion.Version.ToString(),
+            app_data = new { push_websocket_channel = enabled }
         }, ct);
 
     public Task<JsonElement> SendNotificationActionAsync(string webhook, string deviceId, string action, CancellationToken ct, string? tag = null, string? notificationId = null, JsonElement? actionData = null) =>
         WebhookAsync(webhook, "fire_event", new
         {
-            event_type = "mobile_app_notification_action", event_data = new { action, device_id = deviceId, tag, notification_id = notificationId, action_data = actionData }
+            event_type = "mobile_app_notification_action",
+            event_data = new { action, device_id = deviceId, tag, notification_id = notificationId, action_data = actionData }
         }, ct);
 
     private sealed record SensorPayload(
