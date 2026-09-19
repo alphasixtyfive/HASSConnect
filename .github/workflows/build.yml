@@ -14,8 +14,8 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
       - name: Validate release version
@@ -51,7 +51,7 @@ jobs:
           $runningApp.Refresh()
           if (-not $runningApp.HasExited) { throw 'Uninstall left the app running.' }
           if ($remove.ExitCode -ne 0 -or (Test-Path $app)) { throw 'Uninstall failed.' }
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: HASSConnect-Windows-x64
           path: |
@@ -65,8 +65,8 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
           name: HASSConnect-Windows-x64
           path: release
