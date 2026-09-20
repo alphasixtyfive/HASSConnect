@@ -10,12 +10,13 @@ public sealed class NotificationMessageTests
     {
         using var json = JsonDocument.Parse("""
             {"title":"Door","message":"Someone is outside","hass_confirm_id":"delivery-1",
-             "data":{"image":"/local/door.jpg","actions":[{"action":"ACK_DOOR","title":"Acknowledge"}]}}
+             "data":{"image":"/local/door.jpg","url":"https://home.example/dashboard-cameras/front-door","actions":[{"action":"ACK_DOOR","title":"Acknowledge"}]}}
             """);
         var message = NotificationMessage.Parse(json.RootElement);
         Assert.Equal("Door", message.Title);
         Assert.Equal("Someone is outside", message.Message);
         Assert.Equal("/local/door.jpg", message.Image);
+        Assert.Equal("https://home.example/dashboard-cameras/front-door", message.Url);
         Assert.Equal("delivery-1", message.ConfirmationId);
         Assert.Equal(new NotificationAction("ACK_DOOR", "Acknowledge"), Assert.Single(message.Actions));
     }
@@ -45,6 +46,15 @@ public sealed class NotificationMessageTests
         Assert.Null(message.ConfirmationId);
         Assert.Empty(message.Actions);
         Assert.False(message.Persistent);
+        Assert.Null(message.Url);
+    }
+
+    [Fact]
+    public void IgnoresBlankBodyUrl()
+    {
+        using var json = JsonDocument.Parse("""{"message":"Hello","data":{"url":"  "}}""");
+
+        Assert.Null(NotificationMessage.Parse(json.RootElement).Url);
     }
 
     [Fact]

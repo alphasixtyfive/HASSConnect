@@ -64,7 +64,25 @@ fetching from the configured Home Assistant server.
 
 Action buttons emit `mobile_app_notification_action` in Home Assistant with the selected identifier in `event.data.action`. Use that event to trigger an automation. Buttons work while HASS Connect is running. URI buttons open HTTP(S) links in the default browser; paths beginning with `/` resolve against the configured HA server. Inline replies and local PC commands are not supported.
 
-Clicking the notification body opens HASS Connect. An action button runs once and expires after 24 hours or when the app restarts.
+Clicking the notification body opens HASS Connect by default. To open a dashboard or
+web page instead, set `data.url` in the automation:
+
+```yaml
+action: notify.mobile_app_desktop
+data:
+  title: Front door
+  message: Someone is at the door.
+  data:
+    image: /local/front-door.jpg
+    url: https://home.example/dashboard-cameras/front-door
+```
+
+Use a full HTTP(S) URL, or a Home Assistant path beginning with `/` such as
+`/dashboard-cameras/front-door`; relative paths resolve against the configured HA
+server. Clicking anywhere on the notification body, including its image, opens the
+page in the default browser. Custom application protocols and URLs containing
+embedded credentials are rejected. Body links and action buttons run once and
+expire after 24 hours or when the app restarts.
 
 The app supports up to three action buttons. PNG, JPEG and GIF images are limited
 to 5 MB and a five-second download timeout. Redirects are not followed. Image

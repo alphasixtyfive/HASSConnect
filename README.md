@@ -99,6 +99,7 @@ data:
   data:
     tag: front-door
     image: /media/local/camera/snapshots/front-door.jpg
+    url: /dashboard-cameras/front-door
     action_data:
       alert_id: front-door-001
     actions:
@@ -111,7 +112,7 @@ data:
 
 Use an existing snapshot and your dashboard’s path. Reusing a tag replaces the
 previous alert. Action buttons return `mobile_app_notification_action` to HA with
-the alert context; URI buttons open the browser.
+the alert context; URI buttons and `url` notification-body links open the browser.
 
 [Notification examples](docs/notifications.md) cover clearing alerts, images and click events.
 The app must be running and connected. Windows Do not disturb can suppress banners.

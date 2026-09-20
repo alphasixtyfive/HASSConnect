@@ -6,7 +6,7 @@ namespace HassConnect.Core;
 public static class NotificationToast
 {
     public static string Create(NotificationMessage message, bool sound, string? localImage,
-        IReadOnlyList<(string Title, string Argument)> actions)
+        IReadOnlyList<(string Title, string Argument)> actions, string launchArgument = "open")
     {
         ArgumentNullException.ThrowIfNull(message);
         ArgumentNullException.ThrowIfNull(actions);
@@ -16,7 +16,7 @@ public static class NotificationToast
         binding.Add(new XElement("text", Clean(message.Message)));
         if (localImage is not null)
             binding.Add(new XElement("image", new XAttribute("placement", "hero"), new XAttribute("src", localImage)));
-        var toast = new XElement("toast", new XAttribute("launch", "open"), new XElement("visual", binding));
+        var toast = new XElement("toast", new XAttribute("launch", launchArgument), new XElement("visual", binding));
         if (message.Persistent)
         {
             toast.Add(new XAttribute("duration", "long"));

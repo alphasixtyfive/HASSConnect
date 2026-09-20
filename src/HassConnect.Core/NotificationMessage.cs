@@ -11,6 +11,7 @@ public sealed record NotificationMessage(string? Title, string Message, string? 
     public JsonElement? ActionData { get; init; }
     public string NotificationId { get; init; } = Guid.NewGuid().ToString("N");
     public bool Persistent { get; init; }
+    public string? Url { get; init; }
     public bool IsClear => Message == "clear_notification";
     public PcCommand? Command { get; init; }
 
@@ -22,6 +23,7 @@ public sealed record NotificationMessage(string? Title, string Message, string? 
         var actions = new List<NotificationAction>();
         string? image = null;
         string? tag = null;
+        string? url = null;
         var persistent = false;
         JsonElement? actionData = null;
         JsonElement? commandData = null;
@@ -36,6 +38,7 @@ public sealed record NotificationMessage(string? Title, string Message, string? 
             if (data.TryGetProperty("action_data", out var context) && context.ValueKind == JsonValueKind.Object)
                 actionData = context.Clone();
             image = Text(data, "image", 2048);
+            url = Text(data, "url", 2048);
             if (data.TryGetProperty("actions", out var items) && items.ValueKind == JsonValueKind.Array)
                 foreach (var item in items.EnumerateArray())
                 {
@@ -55,7 +58,8 @@ public sealed record NotificationMessage(string? Title, string Message, string? 
             Tag = tag,
             ActionData = actionData,
             Command = PcCommand.Parse(message, commandData),
-            Persistent = persistent
+            Persistent = persistent,
+            Url = string.IsNullOrWhiteSpace(url) ? null : url
         };
     }
 

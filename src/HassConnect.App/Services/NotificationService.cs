@@ -192,7 +192,20 @@ internal sealed class NotificationService : IAsyncDisposable
         }
         ct.ThrowIfCancellationRequested();
         var actions = new List<(string Title, string Argument)>();
+        var activationTokens = new List<string>();
         foreach (var old in _actions.Where(pair => pair.Value.Created < DateTimeOffset.UtcNow.AddHours(-24))) _actions.TryRemove(old.Key, out _);
+        var launchArgument = "open";
+        if (message.Url is not null && _actions.Count < 100)
+        {
+            try
+            {
+                var link = NotificationLink.Resolve(ServerAddress.Parse(settings.ServerUrl), message.Url);
+                launchArgument = Guid.NewGuid().ToString("N");
+                _actions[launchArgument] = new("URI", settings, credentials, DateTimeOffset.UtcNow, message, link);
+                activationTokens.Add(launchArgument);
+            }
+            catch (InvalidDataException) { AppLog.Write("Notification link", "Unsupported body URL"); }
+        }
         foreach (var action in message.Actions)
         {
             if (_actions.Count >= 100) break;
@@ -204,22 +217,25 @@ internal sealed class NotificationService : IAsyncDisposable
                 catch (InvalidDataException) { AppLog.Write("Notification link", "Unsupported URL"); continue; }
             }
             _actions[key] = new(action.Id, settings, credentials, DateTimeOffset.UtcNow, message, link);
+            activationTokens.Add(key);
             actions.Add((action.Title, key));
         }
         try
         {
-            ShowNative(message, settings, image, actions);
+            ShowNative(message, settings, image, actions, launchArgument);
             if (message.Tag is not null) RemoveActions(message.Tag, message.NotificationId);
         }
         catch
         {
-            foreach (var action in actions) _actions.TryRemove(action.Argument, out _);
+            foreach (var token in activationTokens) _actions.TryRemove(token, out _);
             throw;
         }
     }
 
-    private void ShowNative(NotificationMessage message, Settings settings, string? image, IReadOnlyList<(string Title, string Argument)> actions)
-        => _windows.Show(message, settings.NotificationSound, image, actions, message.Tag is null ? null : WindowsTag(message.Tag));
+    private void ShowNative(NotificationMessage message, Settings settings, string? image,
+        IReadOnlyList<(string Title, string Argument)> actions, string launchArgument = "open")
+        => _windows.Show(message, settings.NotificationSound, image, actions,
+            message.Tag is null ? null : WindowsTag(message.Tag), launchArgument);
 
     private void QueueAction(string argument)
         => QueueBackground(() => SendActionAsync(argument));

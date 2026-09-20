@@ -34,13 +34,13 @@ internal sealed partial class WindowsNotifications : IDisposable
     }
 
     public void Show(NotificationMessage message, bool sound, string? image,
-        IReadOnlyList<(string Title, string Argument)> actions, string? tag)
+        IReadOnlyList<(string Title, string Argument)> actions, string? tag, string launchArgument = "open")
     {
         Register();
         var manager = AppNotificationManager.Default;
         if (manager.Setting != AppNotificationSetting.Enabled)
             throw new InvalidOperationException("Allow notifications for HASS Connect in Windows Settings.");
-        var toast = new AppNotification(NotificationToast.Create(message, sound, image, actions))
+        var toast = new AppNotification(NotificationToast.Create(message, sound, image, actions, launchArgument))
         { ExpiresOnReboot = true };
         if (!message.Persistent) toast.Expiration = DateTimeOffset.Now.AddHours(24);
         if (tag is not null) toast.Tag = tag;

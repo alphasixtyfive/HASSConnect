@@ -71,4 +71,16 @@ public sealed class NotificationToastTests
         Assert.Equal("long", toast.Root!.Attribute("duration")?.Value);
         Assert.Equal("reminder", toast.Root.Attribute("scenario")?.Value);
     }
+
+    [Fact]
+    public void BodyLinkUsesAnOpaqueActivationToken()
+    {
+        const string token = "0123456789abcdef0123456789abcdef";
+
+        var toast = XDocument.Parse(NotificationToast.Create(
+            new("Camera", "Motion detected", null, [], null), true, null, [], token));
+
+        Assert.Equal(token, toast.Root!.Attribute("launch")?.Value);
+        Assert.Null(toast.Root.Attribute("activationType"));
+    }
 }
