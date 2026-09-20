@@ -8,7 +8,8 @@ The current release version lives in `Directory.Build.props`.
 - Build an installer with a stable per-user installation path, a Start-menu shortcut and upgrade support.
 - Include or install the Microsoft runtime dependencies described in [packaging](../packaging/README.md).
 - On a clean Windows 11 account, check first launch, connection errors, sensors, startup and tray exit.
-- Verify a notification with a snapshot and two buttons. Check the returned HA event, replacement by tag and clearing.
+- Verify a notification with a snapshot, a body `url` and two buttons. Check the
+  body link, returned HA event, replacement by tag and clearing.
 - Test an upgrade and uninstall. Preserve settings and encrypted credentials; remove shortcuts, startup entries and notification registration owned by the app.
 - Check the release archive for credentials, signing keys, test photos, diagnostic logs and development output.
 - Run the [product screenshot quality gate](screenshots.md). Publish only native-resolution,
