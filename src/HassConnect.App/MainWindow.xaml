@@ -73,6 +73,9 @@
           <RadioButton x:Name="ControlsNav" Style="{StaticResource NavButton}" GroupName="Navigation" Tag="controls" Click="Nav_Click" AutomationProperties.Name="Controls page">
             <StackPanel Orientation="Horizontal" Spacing="10"><FontIcon Glyph="&#xE945;" FontSize="14" /><TextBlock Text="Controls" /></StackPanel>
           </RadioButton>
+          <RadioButton x:Name="QuickAccessNav" Style="{StaticResource NavButton}" GroupName="Navigation" Tag="quick-access" Click="Nav_Click" AutomationProperties.Name="Quick access page">
+            <StackPanel Orientation="Horizontal" Spacing="10"><FontIcon Glyph="&#xE8FD;" FontSize="14" /><TextBlock Text="Quick access" /></StackPanel>
+          </RadioButton>
         </StackPanel>
         <RadioButton x:Name="SettingsNav" Grid.Row="2" Style="{StaticResource NavButton}" GroupName="Navigation" Tag="settings" Click="Nav_Click" Margin="7,2,7,10" AutomationProperties.Name="Settings page">
           <StackPanel Orientation="Horizontal" Spacing="10">
@@ -96,6 +99,7 @@
           <views:SensorSettingsView x:Name="SensorsPage" />
           <views:NotificationSettingsView x:Name="NotificationsPage" Visibility="Collapsed" />
           <views:ControlSettingsView x:Name="ControlsPage" Visibility="Collapsed" />
+          <views:QuickAccessSettingsView x:Name="QuickAccessPage" Visibility="Collapsed" />
           <StackPanel x:Name="SettingsPage" Spacing="16" Visibility="Collapsed">
             <Border Style="{StaticResource Card}">
               <StackPanel Spacing="14">
@@ -249,6 +253,70 @@
             </StackPanel>
           </Grid>
         </Border>
+      </StackPanel>
+    </ContentDialog>
+    <ContentDialog Grid.ColumnSpan="2" x:Name="QuickActionDialog" Title="Quick action">
+      <StackPanel Spacing="12" MinWidth="420">
+        <TextBlock Text="Choose a Home Assistant entity for this tray shortcut."
+                   TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+        <Grid ColumnSpacing="8" RowSpacing="4">
+          <Grid.ColumnDefinitions><ColumnDefinition Width="2*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+          <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+          <TextBlock Text="Entity" />
+          <TextBlock Grid.Column="1" Text="Type" />
+          <TextBox x:Name="QuickEntitySearch" Grid.Row="1" Height="36" PlaceholderText="Search name or ID"
+                   TextChanged="QuickEntitySearch_TextChanged" KeyDown="QuickEntitySearch_KeyDown"
+                   AutomationProperties.Name="Search Home Assistant entities" />
+          <ComboBox x:Name="QuickEntityTypeBox" Grid.Row="1" Grid.Column="1" Height="36" HorizontalAlignment="Stretch"
+                    SelectionChanged="QuickEntityType_Changed" AutomationProperties.Name="Filter entity type">
+            <ComboBoxItem Content="All" Tag="" />
+            <ComboBoxItem Content="Lights" Tag="light" />
+            <ComboBoxItem Content="Switches" Tag="switch" />
+            <ComboBoxItem Content="Toggles" Tag="input_boolean" />
+            <ComboBoxItem Content="Fans" Tag="fan" />
+            <ComboBoxItem Content="Covers" Tag="cover" />
+            <ComboBoxItem Content="Scripts" Tag="script" />
+            <ComboBoxItem Content="Scenes" Tag="scene" />
+            <ComboBoxItem Content="Buttons" Tag="button" />
+          </ComboBox>
+        </Grid>
+        <ListView x:Name="QuickEntityList" Height="208" SelectionMode="Single"
+                  SelectionChanged="QuickEntityList_SelectionChanged" AutomationProperties.Name="Matching entities">
+          <ListView.ItemTemplate>
+            <DataTemplate>
+              <Grid ColumnSpacing="10" Padding="0,3,0,0">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="22" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                <FontIcon Glyph="{Binding Glyph}" FontSize="18" Width="22" VerticalAlignment="Center"
+                          Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                <StackPanel Grid.Column="1" Spacing="2">
+                  <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                  <TextBlock Text="{Binding EntityId}" FontSize="12" TextTrimming="CharacterEllipsis"
+                             Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                </StackPanel>
+                <Border Grid.Row="1" Grid.Column="1" Height="1" Margin="0,5,0,0"
+                        Background="{ThemeResource SectionBorderBrush}" Opacity="{Binding SeparatorOpacity}" />
+              </Grid>
+            </DataTemplate>
+          </ListView.ItemTemplate>
+        </ListView>
+        <TextBlock x:Name="QuickEntityStatus" FontSize="12" TextWrapping="Wrap" Visibility="Collapsed"
+                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" AutomationProperties.LiveSetting="Polite" />
+        <TextBox x:Name="QuickActionLabelBox" Header="Label" MaxLength="40" PlaceholderText="e.g. Desk light" />
+        <Grid ColumnSpacing="12">
+          <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+          <ComboBox x:Name="QuickActionOperationBox" Header="Action" HorizontalAlignment="Stretch"
+                    IsEnabled="False" PlaceholderText="Select an entity first"
+                    AutomationProperties.Name="Action to perform" />
+          <views:QuickActionIconPicker x:Name="QuickActionIconPicker" Grid.Column="1" />
+        </Grid>
+        <TextBlock x:Name="QuickActionError" Visibility="Collapsed" TextWrapping="Wrap"
+                   Foreground="{ThemeResource SystemFillColorCriticalBrush}" AutomationProperties.LiveSetting="Assertive" />
+        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" Margin="0,4,0,0">
+          <Button x:Name="SaveQuickActionButton" Content="Add" Width="110" IsEnabled="False" Style="{StaticResource AccentButtonStyle}"
+                  Click="SaveQuickAction_Click" />
+          <Button Content="Cancel" Width="110" Click="CancelQuickAction_Click" />
+        </StackPanel>
       </StackPanel>
     </ContentDialog>
   </Grid>

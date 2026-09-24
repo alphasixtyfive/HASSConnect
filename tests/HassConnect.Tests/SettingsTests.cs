@@ -14,6 +14,7 @@ public sealed class SettingsTests
         Assert.Equal("", settings.HomeAssistantPath);
         Assert.False(settings.PcControlEnabled);
         Assert.Equal(PcCommandIds.All.Count, settings.EnabledPcCommands.Count);
+        Assert.Null(settings.QuickAccessShortcut);
     }
 
     [Fact]
@@ -31,5 +32,42 @@ public sealed class SettingsTests
         var settings = new Settings { HomeAssistantPath = "/dashboard-cameras" };
         var restored = JsonSerializer.Deserialize<Settings>(JsonSerializer.Serialize(settings))!;
         Assert.Equal("/dashboard-cameras", restored.HomeAssistantPath);
+    }
+
+    [Fact]
+    public void QuickActionOrderSurvivesReload()
+    {
+        var first = QuickActionPolicy.Create("light.desk", "Desk", "", QuickActionPolicy.Toggle);
+        var second = QuickActionPolicy.Create("scene.evening", "Evening", "mdi:star", QuickActionPolicy.Run);
+        var settings = new Settings { QuickActions = [second, first] };
+
+        var restored = JsonSerializer.Deserialize<Settings>(JsonSerializer.Serialize(settings))!;
+
+        Assert.Equal([second, first], restored.QuickActions);
+    }
+
+    [Fact]
+    public void ShortcutSurvivesReloadAndDisplaysClearly()
+    {
+        var shortcut = new QuickAccessShortcut('H', Control: true, Alt: false, Shift: true);
+        var settings = new Settings { QuickAccessShortcut = shortcut };
+
+        var restored = JsonSerializer.Deserialize<Settings>(JsonSerializer.Serialize(settings))!;
+
+        Assert.Equal(shortcut, restored.QuickAccessShortcut);
+        Assert.Equal("Ctrl + Shift + H", QuickAccessShortcutPolicy.Display(restored.QuickAccessShortcut));
+        Assert.Equal("Off", QuickAccessShortcutPolicy.Display(null));
+    }
+
+    [Theory]
+    [InlineData('H', true, false, false)]
+    [InlineData('H', false, false, false)]
+    [InlineData('H', true, true, false)]
+    [InlineData('H', true, true, true)]
+    [InlineData(0x70, true, true, false)]
+    public void ShortcutRejectsRiskyOrUnsupportedCombinations(int key, bool control, bool alt, bool shift)
+    {
+        Assert.Throws<InvalidDataException>(() => QuickAccessShortcutPolicy.Validate(
+            new QuickAccessShortcut(key, control, alt, shift)));
     }
 }

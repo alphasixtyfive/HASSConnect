@@ -42,6 +42,133 @@ public sealed class HaClient : IDisposable
             throw new InvalidOperationException("Enable the Mobile App integration in Home Assistant first.");
     }
 
+    public async Task<IReadOnlyList<QuickActionEntity>> GetQuickActionEntitiesAsync(CancellationToken ct)
+    {
+        using var request = Authorized(HttpMethod.Get, "api/states");
+        using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct)
+            .ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+        await using var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+        var entities = new List<QuickActionEntity>();
+        try
+        {
+            await foreach (var item in JsonSerializer.DeserializeAsyncEnumerable<JsonElement>(
+                stream, cancellationToken: ct).ConfigureAwait(false))
+            {
+                if (ReadQuickActionEntity(item) is { } entity) entities.Add(entity);
+            }
+        }
+        catch (JsonException exception)
+        {
+            throw new InvalidDataException("The server did not return Home Assistant entities.", exception);
+        }
+        return entities.OrderBy(entity => entity.Name, StringComparer.CurrentCultureIgnoreCase)
+            .ThenBy(entity => entity.EntityId, StringComparer.Ordinal).ToArray();
+    }
+
+    public async Task<IReadOnlyDictionary<string, string>> GetQuickActionStatesAsync(
+        IReadOnlyCollection<string> entityIds, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(entityIds);
+        if (entityIds.Count > QuickActionPolicy.MaximumActions || entityIds.Any(string.IsNullOrWhiteSpace))
+            throw new ArgumentException("Choose up to eight configured entities.", nameof(entityIds));
+        var remaining = new HashSet<string>(entityIds, StringComparer.Ordinal);
+        var states = new Dictionary<string, string>(remaining.Count, StringComparer.Ordinal);
+        if (remaining.Count == 0) return states;
+
+        using var request = Authorized(HttpMethod.Get, "api/states");
+        using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct)
+            .ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+        await using var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+        try
+        {
+            await foreach (var item in JsonSerializer.DeserializeAsyncEnumerable<JsonElement>(
+                stream, cancellationToken: ct).ConfigureAwait(false))
+            {
+                var id = StringProperty(item, "entity_id");
+                if (id is null || !remaining.Contains(id)) continue;
+                var state = StringProperty(item, "state");
+                if (state is null) continue;
+                remaining.Remove(id);
+                states.Add(id, state);
+                if (remaining.Count == 0) break;
+            }
+        }
+        catch (JsonException exception)
+        {
+            throw new InvalidDataException("The server did not return Home Assistant entities.", exception);
+        }
+        return states;
+    }
+
+    public async Task InvokeQuickActionAsync(QuickActionDefinition action, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+        var validated = QuickActionPolicy.Create(action.EntityId, action.Label, action.Icon, action.Operation);
+        var dot = validated.EntityId.IndexOf('.');
+        var domain = validated.EntityId[..dot];
+        var service = validated.Operation == QuickActionPolicy.Run
+            ? domain == "button" ? "press" : "turn_on"
+            : validated.Operation;
+        using var request = Authorized(HttpMethod.Post, $"api/services/{domain}/{service}");
+        request.Content = JsonContent.Create(new { entity_id = validated.EntityId });
+        using var response = await _http.SendAsync(request, ct);
+        response.EnsureSuccessStatusCode();
+    }
+
+    private static string? StringProperty(JsonElement element, string property) =>
+        element.ValueKind == JsonValueKind.Object && element.TryGetProperty(property, out var value) &&
+        value.ValueKind == JsonValueKind.String ? value.GetString() : null;
+
+    private static QuickActionEntity? ReadQuickActionEntity(JsonElement item)
+    {
+        if (item.ValueKind != JsonValueKind.Object) return null;
+        var id = StringProperty(item, "entity_id");
+        if (id is null) return null;
+
+        var attributes = item.TryGetProperty("attributes", out var value) && value.ValueKind == JsonValueKind.Object
+            ? value : default;
+        int? supportedFeatures = attributes.ValueKind == JsonValueKind.Object &&
+            attributes.TryGetProperty("supported_features", out var featureValue) &&
+            featureValue.ValueKind == JsonValueKind.Number && featureValue.TryGetInt32(out var features) && features >= 0
+                ? features : null;
+        // Unknown cover capabilities cannot safely be presented as supported actions.
+        if (id.StartsWith("cover.", StringComparison.Ordinal) && supportedFeatures is null) return null;
+        var operations = QuickActionPolicy.AllowedOperations(id, supportedFeatures);
+        if (operations.Count == 0) return null;
+
+        var name = (StringProperty(attributes, "friendly_name") ?? id).Trim();
+        if (name.Length > 40) name = name[..40].TrimEnd();
+        if (name.Length == 0 || name.Any(char.IsControl)) name = id;
+        var coverClass = id.StartsWith("cover.", StringComparison.Ordinal)
+            ? StringProperty(attributes, "device_class") : null;
+        var defaultIcon = coverClass switch
+        {
+            "gate" => "mdi:gate",
+            "garage" => "mdi:garage",
+            "door" => "mdi:door",
+            _ => ""
+        };
+        var icon = StringProperty(attributes, "icon") ?? defaultIcon;
+        var state = StringProperty(item, "state") ?? "unknown";
+        try
+        {
+            var action = QuickActionPolicy.Create(id, name, icon, operations[0]);
+            return new(action.EntityId, action.Label, action.Icon, state, supportedFeatures);
+        }
+        catch (ArgumentException)
+        {
+            // Home Assistant may report an unsupported icon; retain the entity with its domain icon.
+            try
+            {
+                var action = QuickActionPolicy.Create(id, name, defaultIcon, operations[0]);
+                return new(action.EntityId, action.Label, action.Icon, state, supportedFeatures);
+            }
+            catch (ArgumentException) { return null; }
+        }
+    }
+
     public async Task<string> RegisterAsync(Settings settings, CancellationToken ct)
     {
         using var request = Authorized(HttpMethod.Post, "api/mobile_app/registrations");

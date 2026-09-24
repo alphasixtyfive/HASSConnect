@@ -1,0 +1,56 @@
+<UserControl x:Class="HassConnect.App.Views.QuickAccessSettingsView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <StackPanel Spacing="12">
+    <TextBlock Text="Choose actions for the tray popup."
+               Style="{StaticResource BodyTextBlockStyle}" TextWrapping="Wrap"
+               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+    <TextBlock x:Name="StatusText" Text="Connect to Home Assistant in Settings to add actions."
+               FontSize="12" TextWrapping="Wrap" Visibility="Collapsed"
+               AutomationProperties.LiveSetting="Polite"
+               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+    <Border Background="{ThemeResource CardSurfaceBrush}" BorderBrush="{ThemeResource SectionBorderBrush}"
+            BorderThickness="1" CornerRadius="8">
+      <StackPanel>
+        <Grid MinHeight="64" Padding="16,10" ColumnSpacing="16"
+              BorderBrush="{ThemeResource SectionBorderBrush}" BorderThickness="0,0,0,1">
+          <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+          <StackPanel Spacing="2" VerticalAlignment="Center">
+            <TextBlock Text="Actions" Style="{StaticResource BodyTextBlockStyle}" />
+            <TextBlock x:Name="CountText" Style="{StaticResource CaptionTextBlockStyle}"
+                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+          </StackPanel>
+          <Button x:Name="AddButton" Grid.Column="1" Content="Add action" MinWidth="100"
+                  VerticalAlignment="Center" Click="Add_Click" />
+        </Grid>
+        <TextBlock x:Name="EmptyText" Text="Add an action to get started." Padding="16,16"
+                   Style="{StaticResource BodyTextBlockStyle}"
+                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+        <StackPanel x:Name="ActionRows" />
+      </StackPanel>
+    </Border>
+    <Border Background="{ThemeResource CardSurfaceBrush}" BorderBrush="{ThemeResource SectionBorderBrush}"
+            BorderThickness="1" CornerRadius="8">
+      <StackPanel Padding="16,12" Spacing="8">
+        <Grid ColumnSpacing="16">
+          <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+          <StackPanel Spacing="2" VerticalAlignment="Center">
+            <TextBlock Text="Keyboard shortcut" Style="{StaticResource BodyTextBlockStyle}" />
+            <TextBlock x:Name="ShortcutValue" Text="Off" Style="{StaticResource CaptionTextBlockStyle}"
+                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+          </StackPanel>
+          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+            <Button x:Name="RecordShortcutButton" Content="Set shortcut" Click="RecordShortcut_Click"
+                    KeyDown="RecordShortcut_KeyDown" LostFocus="RecordShortcut_LostFocus"
+                    AutomationProperties.Name="Set Quick access shortcut" />
+            <Button x:Name="ClearShortcutButton" Content="Clear" Click="ClearShortcut_Click"
+                    AutomationProperties.Name="Clear Quick access shortcut" IsEnabled="False" />
+          </StackPanel>
+        </Grid>
+        <TextBlock x:Name="ShortcutStatusText" FontSize="12" TextWrapping="Wrap"
+                   Visibility="Collapsed" AutomationProperties.LiveSetting="Polite"
+                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+      </StackPanel>
+    </Border>
+  </StackPanel>
+</UserControl>

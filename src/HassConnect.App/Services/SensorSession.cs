@@ -10,6 +10,8 @@ internal enum SessionState { Disconnected, Connecting, Connected, Paused, Reconn
 
 internal sealed class SensorSession : IAsyncDisposable
 {
+    private sealed record QuickActionConnection(Uri Server, string AccessToken);
+
     private readonly SettingsStore _store;
     private readonly DisplayStateMonitor _display;
     private readonly SemaphoreSlim _gate = new(1, 1);
@@ -18,6 +20,7 @@ internal sealed class SensorSession : IAsyncDisposable
     private readonly Task _messageReceiverStartup;
     private readonly NotificationService _notifications;
     private HaClient? _client;
+    private QuickActionConnection? _quickActionConnection;
     private Credentials? _credentials;
     private Settings _settings;
     private bool _suspended;
@@ -58,7 +61,11 @@ internal sealed class SensorSession : IAsyncDisposable
         _display = new DisplayStateMonitor(window);
         _store.Save(_settings);
         if (_credentials?.WebhookId is not null && !string.IsNullOrWhiteSpace(_settings.ServerUrl))
-            _client = new HaClient(ServerAddress.Parse(_settings.ServerUrl), _credentials.AccessToken);
+        {
+            var server = ServerAddress.Parse(_settings.ServerUrl);
+            _client = new HaClient(server, _credentials.AccessToken);
+            _quickActionConnection = new(server, _credentials.AccessToken);
+        }
         _notifications.Changed += () => Changed?.Invoke();
         _loop = RunAsync(_lifetime.Token);
         _messageReceiverStartup = StartMessageReceiverAsync(_lifetime.Token);
@@ -100,6 +107,7 @@ internal sealed class SensorSession : IAsyncDisposable
                 _client = client;
                 _credentials = credentials;
                 _settings = next;
+                Volatile.Write(ref _quickActionConnection, new(server, credential));
                 _suspended = false;
             }
             catch { client.Dispose(); throw; }
@@ -225,6 +233,89 @@ internal sealed class SensorSession : IAsyncDisposable
         var normalized = HomeAssistantNavigation.NormalizePath(path);
         await _gate.WaitAsync(_lifetime.Token);
         try { SaveSettings(_settings with { HomeAssistantPath = normalized }); }
+        finally { _gate.Release(); Changed?.Invoke(); }
+    }
+
+    public async Task SetQuickAccessShortcutAsync(QuickAccessShortcut? shortcut)
+    {
+        var validated = QuickAccessShortcutPolicy.Validate(shortcut);
+        await _gate.WaitAsync(_lifetime.Token);
+        try { SaveSettings(_settings with { QuickAccessShortcut = validated }); }
+        finally { _gate.Release(); Changed?.Invoke(); }
+    }
+
+    public async Task<IReadOnlyList<QuickActionEntity>> GetQuickActionEntitiesAsync(
+        CancellationToken cancellationToken = default)
+    {
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token, cancellationToken);
+        var connection = QuickActionConnectionOrThrow();
+        using var client = new HaClient(connection.Server, connection.AccessToken);
+        return await client.GetQuickActionEntitiesAsync(linked.Token);
+    }
+
+    public async Task<IReadOnlyDictionary<string, string>> GetQuickActionStatesAsync(
+        IReadOnlyCollection<string> entityIds)
+    {
+        var connection = QuickActionConnectionOrThrow();
+        using var client = new HaClient(connection.Server, connection.AccessToken);
+        return await client.GetQuickActionStatesAsync(entityIds, _lifetime.Token);
+    }
+
+    public async Task InvokeQuickActionAsync(QuickActionDefinition action)
+    {
+        if (!Connected) throw new InvalidOperationException("Home Assistant is not connected.");
+        var connection = QuickActionConnectionOrThrow();
+        // Keep tile actions independent of the sensor publishing lock and its network requests.
+        using var client = new HaClient(connection.Server, connection.AccessToken);
+        await client.InvokeQuickActionAsync(action, _lifetime.Token);
+    }
+
+    private QuickActionConnection QuickActionConnectionOrThrow() =>
+        Volatile.Read(ref _quickActionConnection) ??
+        throw new InvalidOperationException("Connect to Home Assistant first.");
+
+    public async Task SaveQuickActionAsync(QuickActionDefinition action, int? index)
+    {
+        await _gate.WaitAsync(_lifetime.Token);
+        try
+        {
+            var actions = _settings.QuickActions.ToList();
+            if (index is { } position)
+            {
+                if (position < 0 || position >= actions.Count) throw new ArgumentOutOfRangeException(nameof(index));
+                actions[position] = action;
+            }
+            else actions.Add(action);
+            SaveSettings(_settings with { QuickActions = QuickActionPolicy.ValidateCollection(actions).ToArray() });
+        }
+        finally { _gate.Release(); Changed?.Invoke(); }
+    }
+
+    public async Task RemoveQuickActionAsync(int index)
+    {
+        await _gate.WaitAsync(_lifetime.Token);
+        try
+        {
+            var actions = _settings.QuickActions.ToList();
+            if (index < 0 || index >= actions.Count) throw new ArgumentOutOfRangeException(nameof(index));
+            actions.RemoveAt(index);
+            SaveSettings(_settings with { QuickActions = actions });
+        }
+        finally { _gate.Release(); Changed?.Invoke(); }
+    }
+
+    public async Task MoveQuickActionAsync(int index, int direction)
+    {
+        await _gate.WaitAsync(_lifetime.Token);
+        try
+        {
+            var actions = _settings.QuickActions.ToList();
+            var destination = index + direction;
+            if (direction is not (-1 or 1) || index < 0 || destination < 0 || destination >= actions.Count)
+                throw new ArgumentOutOfRangeException(nameof(index));
+            (actions[index], actions[destination]) = (actions[destination], actions[index]);
+            SaveSettings(_settings with { QuickActions = actions });
+        }
         finally { _gate.Release(); Changed?.Invoke(); }
     }
 

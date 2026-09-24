@@ -19,8 +19,9 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Publish failed.' }
     & ./tools/Get-ReleaseVersion.ps1 -AppDirectory $OutputDirectory | Out-Null
     Copy-Item -LiteralPath (Join-Path $OutputDirectory 'HassConnect.App.pri') -Destination (Join-Path $OutputDirectory 'resources.pri') -Force
-    foreach ($resource in 'HassConnect.App.exe', 'HassConnect.App.pri', 'resources.pri', 'App.xbf', 'MainWindow.xbf',
+    foreach ($resource in 'HassConnect.App.exe', 'HassConnect.App.pri', 'resources.pri', 'App.xbf', 'MainWindow.xbf', 'QuickAccessWindow.xbf',
         'Views/SettingsRow.xbf', 'Views/SensorSettingsView.xbf', 'Views/NotificationSettingsView.xbf', 'Views/ControlSettingsView.xbf',
+        'Views/QuickAccessSettingsView.xbf', 'Views/QuickActionIconPicker.xbf',
         'Views/AboutView.xbf', 'Assets/app.ico', 'Assets/hass-connect.png') {
         if (-not (Test-Path -LiteralPath (Join-Path $OutputDirectory $resource))) { throw "Published app is missing $resource." }
     }

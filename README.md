@@ -39,7 +39,8 @@ unknown-publisher warning.
 3. Enable the sensors and notifications you want.
 
 In Home Assistant, open your profile and select **Security** to create a long-lived access token.
-Closing the window keeps the app in the tray. The tray menu also opens Home Assistant in your browser. Choose **Quit** to stop the app.
+Closing the window keeps the app in the tray. Click the tray icon for your quick actions,
+or right-click it to open the app, open Home Assistant, or quit.
 
 ## Screenshots
 
@@ -125,6 +126,19 @@ restart the PC, turn off its displays, and control media or volume. Each command
 For anything else, create a custom command by choosing the exact `.exe` and fixed arguments
 on the PC. Home Assistant can trigger the saved command but cannot change what it runs. See
 the [PC command reference](docs/commands.md) and [custom-command guide](docs/custom-commands.md).
+
+## Quick access
+
+Open **Quick access** in the app to choose up to eight Home Assistant entities. Search by
+name or entity ID, choose an action and icon, then use the arrows to set the tray order.
+Lights, switches, fans and toggle helpers support toggle, on and off; scripts, scenes and
+buttons support run. Covers offer the actions supported by each device, including toggle
+when both open and close are available. Click the tray icon to use the actions without
+opening a browser. You can also set an optional keyboard shortcut on the Quick access
+page; it is off by default. Arrow keys move between action tiles, and Tab reaches the
+footer controls. The popup stays open after an action and shows the latest state reported
+by Home Assistant. Click away or press Escape to close it. Actions are
+unavailable while Home Assistant is disconnected.
 
 ## Privacy and updates
 

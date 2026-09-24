@@ -1,12 +1,18 @@
 using System.Runtime.InteropServices;
+using HassConnect.Core;
 
 namespace HassConnect.App.Services;
 
 internal sealed class TrayIcon : IDisposable
 {
     private const uint CallbackMessage = 0x8001;
+    private const uint HotkeyMessage = 0x0312;
+    private const uint NoRepeat = 0x4000;
+    private const int FirstHotkeyId = 0x1001;
+    private const int SecondHotkeyId = 0x1002;
     private readonly nint _window;
     private readonly Action _open;
+    private readonly Action<bool> _showQuickAccess;
     private readonly Action _quit;
     private readonly Action _openHomeAssistant;
     public bool CanOpenHomeAssistant { get; set; }
@@ -14,10 +20,13 @@ internal sealed class TrayIcon : IDisposable
     private readonly uint _taskbarCreated;
     private NotifyIconData _data;
     private bool _disposed;
+    private int _hotkeyId;
+    private QuickAccessShortcut? _shortcut;
 
-    public TrayIcon(nint window, Action open, Action quit, Action openHomeAssistant)
+    public TrayIcon(nint window, Action open, Action<bool> showQuickAccess, Action quit, Action openHomeAssistant)
     {
         _window = window; _open = open; _quit = quit;
+        _showQuickAccess = showQuickAccess;
         _openHomeAssistant = openHomeAssistant;
         _callback = WindowProc;
         _taskbarCreated = RegisterWindowMessage("TaskbarCreated");
@@ -55,12 +64,41 @@ internal sealed class TrayIcon : IDisposable
         Shell_NotifyIcon(1, ref _data);
     }
 
+    public bool SetQuickAccessShortcut(QuickAccessShortcut? shortcut)
+    {
+        if (_disposed) return false;
+        if (shortcut == _shortcut) return true;
+        if (shortcut is null)
+        {
+            if (_hotkeyId != 0) UnregisterHotKey(_window, _hotkeyId);
+            _hotkeyId = 0;
+            _shortcut = null;
+            return true;
+        }
+
+        var nextId = _hotkeyId == FirstHotkeyId ? SecondHotkeyId : FirstHotkeyId;
+        var modifiers = NoRepeat
+            | (shortcut.Alt ? 0x0001u : 0)
+            | (shortcut.Control ? 0x0002u : 0)
+            | (shortcut.Shift ? 0x0004u : 0);
+        if (!RegisterHotKey(_window, nextId, modifiers, (uint)shortcut.VirtualKey)) return false;
+        if (_hotkeyId != 0) UnregisterHotKey(_window, _hotkeyId);
+        _hotkeyId = nextId;
+        _shortcut = shortcut;
+        return true;
+    }
+
     private nint WindowProc(nint hwnd, uint message, nint wParam, nint lParam, nuint id, nuint reference)
     {
         if (message == _taskbarCreated) Shell_NotifyIcon(0, ref _data);
+        if (message == HotkeyMessage && (int)wParam == _hotkeyId)
+        {
+            _showQuickAccess(true);
+            return 0;
+        }
         if (message == CallbackMessage)
         {
-            if ((int)lParam == 0x0202) _open();
+            if ((int)lParam == 0x0202) _showQuickAccess(false);
             if ((int)lParam == 0x0205)
             {
                 GetCursorPos(out var point);
@@ -88,6 +126,7 @@ internal sealed class TrayIcon : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        if (_hotkeyId != 0) UnregisterHotKey(_window, _hotkeyId);
         Shell_NotifyIcon(2, ref _data);
         RemoveWindowSubclass(_window, _callback, 1);
         if (_data.Icon != 0) DestroyIcon(_data.Icon);
@@ -120,4 +159,10 @@ internal sealed class TrayIcon : IDisposable
     [DllImport("user32.dll")] private static extern uint TrackPopupMenu(nint menu, uint flags, int x, int y, int reserved, nint hwnd, nint rect);
     [DllImport("user32.dll")] private static extern bool DestroyMenu(nint menu);
     [DllImport("user32.dll")] private static extern bool SetForegroundWindow(nint hwnd);
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool RegisterHotKey(nint hwnd, int id, uint modifiers, uint key);
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool UnregisterHotKey(nint hwnd, int id);
 }

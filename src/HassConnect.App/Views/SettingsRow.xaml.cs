@@ -9,6 +9,7 @@ public sealed partial class SettingsRow : UserControl
     private bool _updating = true;
     private UIElement? _trailingContent;
     private bool _showsToggleState;
+    private bool _alwaysStackValue;
 
     public SettingsRow()
     {
@@ -45,6 +46,16 @@ public sealed partial class SettingsRow : UserControl
             ValueLabel.Visibility = string.IsNullOrEmpty(value) ? Visibility.Collapsed : Visibility.Visible;
             AutomationProperties.SetItemStatus(Switch, value);
             ToolTipService.SetToolTip(ValueLabel, string.IsNullOrEmpty(value) ? null : value);
+            UpdateValueLayout();
+        }
+    }
+
+    public bool AlwaysStackValue
+    {
+        get => _alwaysStackValue;
+        set
+        {
+            _alwaysStackValue = value;
             UpdateValueLayout();
         }
     }
@@ -109,7 +120,7 @@ public sealed partial class SettingsRow : UserControl
     {
         if (TitleText is null || ValueLabel is null) return;
 
-        var stacked = Row.ActualWidth < 560 && ValueLabel.Visibility == Visibility.Visible;
+        var stacked = (_alwaysStackValue || Row.ActualWidth < 560) && ValueLabel.Visibility == Visibility.Visible;
         Grid.SetColumn(ValueLabel, stacked ? 0 : 1);
         Grid.SetRow(ValueLabel, stacked ? 1 : 0);
         Grid.SetColumnSpan(TitleText, stacked ? 2 : 1);

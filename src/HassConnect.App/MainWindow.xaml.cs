@@ -45,7 +45,7 @@ public sealed partial class MainWindow : Window
         SystemBackdrop = new MicaBackdrop();
         Root.ActualThemeChanged += (_, _) => UpdateTitleBar();
         Activated += (_, args) => { if (args.WindowActivationState == WindowActivationState.Deactivated) HideToken(); };
-        _tray = new TrayIcon(_windowHandle, ShowWindow, () => _ = QuitAsync(), OpenHomeAssistant);
+        _tray = new TrayIcon(_windowHandle, ShowWindow, ShowQuickAccess, () => _ = QuitAsync(), OpenHomeAssistant);
         AppWindow.Closing += (_, args) => { if (!_quitting) { args.Cancel = true; AppWindow.Hide(); } };
         try
         {
@@ -72,6 +72,7 @@ public sealed partial class MainWindow : Window
             ControlsPage.AddCustomCommandRequested += () => _ = ShowCustomCommandDialogAsync(null);
             ControlsPage.EditCustomCommandRequested += id => _ = ShowCustomCommandDialogAsync(id);
             ControlsPage.CustomCommandEnabledChanged += CustomCommandEnabled_Changed;
+            InitializeQuickAccess();
             UpdatesPage.AvailabilityChanged += available =>
                 SettingsUpdateBadge.Visibility = available ? Visibility.Visible : Visibility.Collapsed;
             Refresh();
@@ -98,6 +99,7 @@ public sealed partial class MainWindow : Window
 
     internal void ShowWindow()
     {
+        _quickAccessWindow?.Hide();
         AppWindow.Show();
         WindowActivation.RestoreAndActivate(_windowHandle);
         Activate();
@@ -105,6 +107,7 @@ public sealed partial class MainWindow : Window
 
     private async void OpenHomeAssistant()
     {
+        _quickAccessWindow?.Hide();
         if (_session is null) return;
         try
         {
@@ -165,6 +168,7 @@ public sealed partial class MainWindow : Window
             _session.RemoteMessagesConnected, _session.RemoteMessageStatus);
         ControlsPage.Update(_session.Settings, _session.IsRegistered,
             _session.RemoteMessagesConnected, _session.RemoteMessageStatus);
+        QuickAccessPage.Update(_session.Settings, _session.IsRegistered);
         RefreshConnectionAction();
         _tray.CanOpenHomeAssistant = !string.IsNullOrWhiteSpace(_session.Settings.ServerUrl);
         _tray.SetStatus(_session.Connected && _session.Paused ? "Connected · sensors disabled" : _session.Status);
@@ -182,15 +186,18 @@ public sealed partial class MainWindow : Window
         SensorsNav.IsChecked = page == "sensors";
         NotificationsNav.IsChecked = page == "notifications";
         ControlsNav.IsChecked = page == "controls";
+        QuickAccessNav.IsChecked = page == "quick-access";
         SettingsNav.IsChecked = page == "settings";
         NotificationsPage.Visibility = page == "notifications" ? Visibility.Visible : Visibility.Collapsed;
         ControlsPage.Visibility = page == "controls" ? Visibility.Visible : Visibility.Collapsed;
+        QuickAccessPage.Visibility = page == "quick-access" ? Visibility.Visible : Visibility.Collapsed;
         SensorsPage.Visibility = page == "sensors" ? Visibility.Visible : Visibility.Collapsed;
         SettingsPage.Visibility = page == "settings" ? Visibility.Visible : Visibility.Collapsed;
         PageTitle.Text = page switch
         {
             "notifications" => "Notifications",
             "controls" => "Controls",
+            "quick-access" => "Quick access",
             "settings" => "Settings",
             _ => "Sensors"
         };
@@ -693,6 +700,7 @@ public sealed partial class MainWindow : Window
         _quitting = true;
         NotificationsPage.ClearTransientFeedback();
         _tray.Dispose();
+        _quickAccessWindow?.Hide();
         try
         {
             if (_session is not null) await _session.DisposeAsync();
