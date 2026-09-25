@@ -15,6 +15,7 @@ for your HASS Connect device.
 | --- | --- | --- |
 | Lock PC | `command_lock` | None |
 | Turn off displays | `command_monitor_sleep` | None |
+| Wake displays | `command_monitor_wake` | None |
 | Sleep PC | `command_sleep` | None |
 | Shut down PC | `command_shutdown` | None |
 | Restart PC | `command_restart` | None |
@@ -89,6 +90,9 @@ HASS Connect targets Windows 11 x64 and uses documented Windows APIs:
 - Lock calls `LockWorkStation` on the interactive desktop.
 - Display-off posts `WM_SYSCOMMAND` with `SC_MONITORPOWER` to avoid blocking on a
   non-responsive window.
+- Display-wake resets the Windows display idle timer with a one-shot
+  `SetThreadExecutionState(ES_DISPLAY_REQUIRED)` request. The PC must already be awake
+  and HASS Connect connected; use Wake-on-LAN to wake a sleeping or powered-off PC.
 - Sleep enables `SeShutdownPrivilege` only around `SetSuspendState`, then restores
   the process token's previous privilege state.
 - Shutdown and restart briefly enable `SeShutdownPrivilege` and request a planned,

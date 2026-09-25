@@ -10,6 +10,7 @@ internal static class PcControlCatalog
     [
         new(PcCommandIds.Lock, "Lock PC", "Lock the current Windows session.", "System", "\uE72E"),
         new(PcCommandIds.MonitorSleep, "Turn off displays", "Put connected displays into power-saving mode.", "System", "\uE7F4"),
+        new(PcCommandIds.MonitorWake, "Wake displays", "Turn on displays that Windows has powered down.", "System", "\uE714"),
         new(PcCommandIds.Sleep, "Sleep PC", "Put this PC into sleep mode.", "System", "\uE708"),
         new(PcCommandIds.Shutdown, "Shut down PC", "Close apps and turn off this PC.", "System", "\uE7E8"),
         new(PcCommandIds.Restart, "Restart PC", "Close apps and restart this PC.", "System", "\uE777"),

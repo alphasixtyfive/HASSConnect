@@ -9,6 +9,7 @@ internal static class WindowsPowerControl
     private const uint WindowMessageSystemCommand = 0x0112;
     private const int SystemCommandMonitorPower = 0xF170;
     private const int MonitorPowerOff = 2;
+    private const uint DisplayRequired = 0x00000002;
     private const uint TokenQuery = 0x0008;
     private const uint TokenAdjustPrivileges = 0x0020;
     private const uint PrivilegeEnabled = 0x0002;
@@ -27,6 +28,12 @@ internal static class WindowsPowerControl
         if (!PostMessage(BroadcastWindow, WindowMessageSystemCommand,
                 (nint)SystemCommandMonitorPower, (nint)MonitorPowerOff))
             throw LastError();
+    }
+
+    public static void WakeDisplays()
+    {
+        // A one-shot request resets the display idle timer without keeping it awake.
+        if (SetThreadExecutionState(DisplayRequired) == 0) throw LastError();
     }
 
     public static void Sleep()
@@ -81,6 +88,9 @@ internal static class WindowsPowerControl
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool PostMessage(nint window, uint message, nint parameter, nint value);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern uint SetThreadExecutionState(uint flags);
 
     [DllImport("powrprof.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.U1)]

@@ -12,7 +12,8 @@ public enum PcCommandKind
     VolumeLevel = 5,
     Custom = 6,
     Shutdown = 7,
-    Restart = 8
+    Restart = 8,
+    MonitorWake = 9
 }
 public enum MediaCommand { PlayPause, Next, Previous, Stop }
 
@@ -20,6 +21,7 @@ public static class PcCommandIds
 {
     public const string Lock = "command_lock";
     public const string MonitorSleep = "command_monitor_sleep";
+    public const string MonitorWake = "command_monitor_wake";
     public const string Sleep = "command_sleep";
     public const string Shutdown = "command_shutdown";
     public const string Restart = "command_restart";
@@ -29,7 +31,7 @@ public static class PcCommandIds
 
     public static IReadOnlyList<string> All { get; } =
     [
-        Lock, MonitorSleep, Sleep, Shutdown, Restart, Media, VolumeMute, VolumeLevel
+        Lock, MonitorSleep, MonitorWake, Sleep, Shutdown, Restart, Media, VolumeMute, VolumeLevel
     ];
 
     public static bool IsKnown(string id) => All.Contains(id, StringComparer.Ordinal);
@@ -48,6 +50,7 @@ public sealed record PcCommand(
     {
         PcCommandKind.Lock => PcCommandIds.Lock,
         PcCommandKind.MonitorSleep => PcCommandIds.MonitorSleep,
+        PcCommandKind.MonitorWake => PcCommandIds.MonitorWake,
         PcCommandKind.Sleep => PcCommandIds.Sleep,
         PcCommandKind.Shutdown => PcCommandIds.Shutdown,
         PcCommandKind.Restart => PcCommandIds.Restart,
@@ -64,6 +67,7 @@ public sealed record PcCommand(
         {
             PcCommandIds.Lock => new(PcCommandKind.Lock),
             PcCommandIds.MonitorSleep => new(PcCommandKind.MonitorSleep),
+            PcCommandIds.MonitorWake => new(PcCommandKind.MonitorWake),
             PcCommandIds.Sleep => new(PcCommandKind.Sleep),
             PcCommandIds.Shutdown => new(PcCommandKind.Shutdown),
             PcCommandIds.Restart => new(PcCommandKind.Restart),

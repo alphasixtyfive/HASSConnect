@@ -39,6 +39,15 @@
               message: command_monitor_sleep
 
         - type: button
+          name: Wake displays
+          icon: mdi:monitor
+          tap_action:
+            action: perform-action
+            perform_action: notify.mobile_app_your_pc
+            data:
+              message: command_monitor_wake
+
+        - type: button
           name: Sleep PC
           icon: mdi:power-sleep
           tap_action:

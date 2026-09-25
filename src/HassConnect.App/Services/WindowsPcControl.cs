@@ -14,6 +14,9 @@ internal sealed class WindowsPcControl : IPcCommandExecutor
             case PcCommandKind.MonitorSleep:
                 WindowsPowerControl.TurnOffDisplays();
                 break;
+            case PcCommandKind.MonitorWake:
+                WindowsPowerControl.WakeDisplays();
+                break;
             case PcCommandKind.Sleep:
                 WindowsPowerControl.Sleep();
                 break;

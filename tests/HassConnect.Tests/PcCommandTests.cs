@@ -8,7 +8,7 @@ public sealed class PcCommandTests
     [Fact]
     public void CommandIdentifiersAreUniqueAndComplete()
     {
-        Assert.Equal(8, PcCommandIds.All.Count);
+        Assert.Equal(9, PcCommandIds.All.Count);
         Assert.Equal(PcCommandIds.All.Count, PcCommandIds.All.Distinct(StringComparer.Ordinal).Count());
         Assert.All(PcCommandIds.All, id => Assert.True(PcCommandIds.IsKnown(id)));
     }
@@ -16,6 +16,7 @@ public sealed class PcCommandTests
     [Theory]
     [InlineData("command_lock", PcCommandKind.Lock)]
     [InlineData("command_monitor_sleep", PcCommandKind.MonitorSleep)]
+    [InlineData("command_monitor_wake", PcCommandKind.MonitorWake)]
     [InlineData("command_sleep", PcCommandKind.Sleep)]
     [InlineData("command_shutdown", PcCommandKind.Shutdown)]
     [InlineData("command_restart", PcCommandKind.Restart)]
