@@ -184,7 +184,9 @@ public sealed partial class ControlSettingsView : UserControl
         ToolTipService.SetToolTip(controls.Row, command.ExecutablePath);
         AutomationProperties.SetHelpText(
             controls.Row,
-            $"Runs {command.ExecutablePath} with locally stored fixed arguments.");
+            CustomCommandPolicy.IsScript(command)
+                ? $"Runs the locally selected script {command.ExecutablePath}."
+                : $"Runs {command.ExecutablePath} with locally stored fixed arguments.");
         AutomationProperties.SetName(controls.Toggle, $"{command.Name} enabled");
         AutomationProperties.SetName(controls.Settings, $"Edit {command.Name}");
         if (controls.Toggle.IsOn == command.Enabled) return;

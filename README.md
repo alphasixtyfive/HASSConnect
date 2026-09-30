@@ -123,8 +123,9 @@ The app must be running and connected. Windows Do not disturb can suppress banne
 PC control is off until you enable it. The built-in commands can lock, sleep, shut down or
 restart the PC, turn its displays off or wake them, and control media or volume. Each command has its own switch.
 
-For anything else, create a custom command by choosing the exact `.exe` and fixed arguments
-on the PC. Home Assistant can trigger the saved command but cannot change what it runs. See
+For anything else, create a custom command by choosing a local `.exe`, `.bat`, `.cmd` or
+`.ps1` file on the PC. `.exe` commands can also have fixed arguments. Home Assistant can
+trigger the saved command but cannot change what it runs. See
 the [PC command reference](docs/commands.md) and [custom-command guide](docs/custom-commands.md).
 
 ## Quick access

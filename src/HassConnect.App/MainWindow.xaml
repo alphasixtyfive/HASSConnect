@@ -201,7 +201,7 @@
     <ContentDialog Grid.ColumnSpan="2" x:Name="CustomCommandDialog" Title="Custom command"
                    KeyDown="CustomCommandDialog_KeyDown">
       <StackPanel Spacing="12" MinWidth="420">
-        <TextBlock Text="Choose a trusted program that Home Assistant can start on this PC."
+        <TextBlock Text="Choose a trusted program or script that Home Assistant can start on this PC. Scripts run as your Windows account."
                    TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
         <TextBox x:Name="CustomCommandNameBox" Header="Display name" MaxLength="60"
                  PlaceholderText="Open music player" />
@@ -214,11 +214,11 @@
         </StackPanel>
         <Grid ColumnSpacing="8">
           <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-          <TextBox x:Name="CustomCommandExecutableBox" Header="Program (.exe)" PlaceholderText="C:\Program Files\App\App.exe" />
+          <TextBox x:Name="CustomCommandExecutableBox" Header="Program or script (.exe, .bat, .cmd, .ps1)" PlaceholderText="C:\Scripts\action.ps1" />
           <Button x:Name="BrowseCustomCommandButton" Grid.Column="1" Content="Browse…" VerticalAlignment="Bottom" Height="32"
                   Click="BrowseCustomCommand_Click" />
         </Grid>
-        <TextBox x:Name="CustomCommandArgumentsBox" Header="Optional launch options (one per line)"
+        <TextBox x:Name="CustomCommandArgumentsBox" Header="Optional launch options for .exe (one per line)"
                  AcceptsReturn="True" TextWrapping="NoWrap" MinHeight="88"
                  PlaceholderText="--profile&#x0a;Home Assistant" />
         <TextBlock x:Name="CustomCommandError" Visibility="Collapsed" TextWrapping="Wrap"

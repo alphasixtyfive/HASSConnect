@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using HassConnect.Core;
 
@@ -26,6 +27,63 @@ public sealed class CustomCommandTests
     }
 
     [Theory]
+    [InlineData(".bat")]
+    [InlineData(".cmd")]
+    public void StartsSelectedBatchFileWithSpacesInItsPath(string extension)
+    {
+        var folder = Path.Combine(Path.GetTempPath(), $"HASS Connect (script test) {Guid.NewGuid():N}");
+        Directory.CreateDirectory(folder);
+        try
+        {
+            var script = Path.Combine(folder, "trusted action" + extension);
+            var marker = Path.Combine(folder, "finished.txt");
+            File.WriteAllText(script, $"@echo off\r\n>\"{marker}\" echo completed\r\n");
+            var command = CustomCommandPolicy.Create("command_custom_batch", "Batch", script, []);
+            var start = CustomCommandPolicy.CreateStartInfo(command);
+
+            Assert.Equal(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "cmd.exe"), start.FileName);
+            Assert.False(start.UseShellExecute);
+            Assert.True(start.RedirectStandardInput);
+            Assert.Equal(folder, start.WorkingDirectory);
+            using var process = Process.Start(start)!;
+            process.StandardInput.Close();
+            Assert.True(process.WaitForExit(10_000));
+            Assert.Equal(0, process.ExitCode);
+            Assert.Equal("completed", File.ReadAllText(marker).Trim());
+        }
+        finally { Directory.Delete(folder, recursive: true); }
+    }
+
+    [Fact]
+    public void PowerShellScriptUsesFileModeWithoutInlineCodeOrPolicyBypass()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), $"HASS Connect script test {Guid.NewGuid():N}");
+        Directory.CreateDirectory(folder);
+        try
+        {
+            var script = Path.Combine(folder, "trusted action.ps1");
+            var marker = Path.Combine(folder, "finished.txt");
+            File.WriteAllText(script,
+                $"Set-Content -LiteralPath '{marker.Replace("'", "''")}' -Value 'completed'\r\nexit 0\r\n");
+            var command = CustomCommandPolicy.Create("command_custom_powershell", "PowerShell", script, []);
+            var start = CustomCommandPolicy.CreateStartInfo(command);
+
+            Assert.Equal(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),
+                "WindowsPowerShell", "v1.0", "powershell.exe"), start.FileName);
+            Assert.False(start.UseShellExecute);
+            Assert.True(start.RedirectStandardInput);
+            Assert.Equal(["-NoProfile", "-NonInteractive", "-File", script], start.ArgumentList.ToArray());
+            Assert.Empty(start.Arguments);
+            using var process = Process.Start(start)!;
+            process.StandardInput.Close();
+            Assert.True(process.WaitForExit(10_000));
+            Assert.Equal(0, process.ExitCode);
+            Assert.Equal("completed", File.ReadAllText(marker).Trim());
+        }
+        finally { Directory.Delete(folder, recursive: true); }
+    }
+
+    [Theory]
     [InlineData("custom_open_notes")]
     [InlineData("command_custom_")]
     [InlineData("command_custom_Uppercase")]
@@ -38,11 +96,20 @@ public sealed class CustomCommandTests
 
     [Theory]
     [InlineData("relative.exe")]
-    [InlineData("C:\\scripts\\task.cmd")]
+    [InlineData("C:\\scripts\\task.psm1")]
     [InlineData("\\\\server\\share\\task.exe")]
-    public void RejectsNonLocalOrNonExecutablePaths(string path) =>
+    public void RejectsNonLocalOrUnsupportedPaths(string path) =>
         Assert.Throws<ArgumentException>(() =>
             CustomCommandPolicy.Create("command_custom_test", "Test", path, [], requireExecutable: false));
+
+    [Fact]
+    public void ScriptsRejectLaunchOptionsAndBatchShellCharacters()
+    {
+        Assert.Throws<ArgumentException>(() => CustomCommandPolicy.Create(
+            "command_custom_script", "Script", "C:\\Scripts\\action.ps1", ["-Extra"], requireExecutable: false));
+        Assert.Throws<ArgumentException>(() => CustomCommandPolicy.Create(
+            "command_custom_script", "Script", "C:\\Scripts\\a&b.cmd", [], requireExecutable: false));
+    }
 
     [Fact]
     public void RejectsMissingExecutableWhenSavingOrLaunching()

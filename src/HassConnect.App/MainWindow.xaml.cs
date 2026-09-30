@@ -689,6 +689,9 @@ public sealed partial class MainWindow : Window
         var picker = new Windows.Storage.Pickers.FileOpenPicker();
         WinRT.Interop.InitializeWithWindow.Initialize(picker, _windowHandle);
         picker.FileTypeFilter.Add(".exe");
+        picker.FileTypeFilter.Add(".bat");
+        picker.FileTypeFilter.Add(".cmd");
+        picker.FileTypeFilter.Add(".ps1");
         var file = await picker.PickSingleFileAsync();
         if (file is not null) CustomCommandExecutableBox.Text = file.Path;
     }

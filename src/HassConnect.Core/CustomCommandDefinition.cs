@@ -15,6 +15,7 @@ public static partial class CustomCommandPolicy
 {
     public const int MaximumCommands = 20;
     public const int MaximumArguments = 16;
+    private static readonly char[] BatchMetacharacters = ['&', '|', '<', '>', '^', '%', '!'];
 
     public static CustomCommandDefinition Create(
         string? id,
@@ -34,28 +35,32 @@ public static partial class CustomCommandPolicy
             throw new ArgumentException("Enter a command name from 1 to 60 characters.", nameof(name));
 
         var path = executablePath?.Trim() ?? string.Empty;
+        var extension = Path.GetExtension(path).ToLowerInvariant();
         if (!Path.IsPathFullyQualified(path) || path.StartsWith("\\\\", StringComparison.Ordinal) ||
-            !Path.GetExtension(path).Equals(".exe", StringComparison.OrdinalIgnoreCase))
+            extension is not (".exe" or ".bat" or ".cmd" or ".ps1"))
         {
-            throw new ArgumentException("Choose an absolute path to a local .exe file.", nameof(executablePath));
+            throw new ArgumentException("Choose an absolute path to a local .exe, .bat, .cmd or .ps1 file.", nameof(executablePath));
         }
         try { path = Path.GetFullPath(path); }
         catch (Exception exception) when (exception is ArgumentException or NotSupportedException or PathTooLongException)
         {
-            throw new ArgumentException("Choose a valid absolute path to a local .exe file.", nameof(executablePath));
+            throw new ArgumentException("Choose a valid absolute path to a local program or script.", nameof(executablePath));
         }
+        if (extension is ".bat" or ".cmd" && path.IndexOfAny(BatchMetacharacters) >= 0)
+            throw new ArgumentException("Batch file paths cannot contain &, |, <, >, ^, % or !.", nameof(executablePath));
         if (requireExecutable)
         {
             if (!File.Exists(path))
-                throw new ArgumentException("The selected executable does not exist.", nameof(executablePath));
+                throw new ArgumentException("The selected program or script does not exist.", nameof(executablePath));
             try
             {
                 if (File.GetAttributes(path).HasFlag(FileAttributes.ReparsePoint))
-                    throw new ArgumentException("The selected executable cannot be a symbolic link or reparse point.", nameof(executablePath));
+                    throw new ArgumentException("The selected file cannot be a symbolic link or reparse point.", nameof(executablePath));
+                if (extension != ".exe") ValidateScriptDirectory(path);
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
-                throw new ArgumentException("The selected executable cannot be inspected.", nameof(executablePath), exception);
+                throw new ArgumentException("The selected file cannot be inspected.", nameof(executablePath), exception);
             }
         }
 
@@ -67,6 +72,8 @@ public static partial class CustomCommandPolicy
         {
             throw new ArgumentException("Arguments must be printable, at most 512 characters each and 4096 characters in total.", nameof(arguments));
         }
+        if (extension != ".exe" && normalizedArguments.Count > 0)
+            throw new ArgumentException("Scripts do not accept launch options.", nameof(arguments));
 
         return new(normalizedId, normalizedName, path, normalizedArguments, enabled);
     }
@@ -106,14 +113,53 @@ public static partial class CustomCommandPolicy
         ArgumentNullException.ThrowIfNull(command);
         var validated = Create(command.Id, command.Name, command.ExecutablePath, command.Arguments,
             command.Enabled, requireExecutable: true);
-        var start = new ProcessStartInfo(validated.ExecutablePath)
+        var extension = Path.GetExtension(validated.ExecutablePath).ToLowerInvariant();
+        var systemDirectory = Environment.GetFolderPath(Environment.SpecialFolder.System);
+        var executable = extension switch
+        {
+            ".bat" or ".cmd" => Path.Combine(systemDirectory, "cmd.exe"),
+            ".ps1" => Path.Combine(systemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe"),
+            _ => validated.ExecutablePath
+        };
+        var start = new ProcessStartInfo(executable)
         {
             UseShellExecute = false,
             CreateNoWindow = true,
-            WorkingDirectory = Path.GetDirectoryName(validated.ExecutablePath)!
+            WorkingDirectory = Path.GetDirectoryName(validated.ExecutablePath)!,
+            RedirectStandardInput = extension != ".exe"
         };
-        foreach (var argument in validated.Arguments) start.ArgumentList.Add(argument);
+        if (extension is ".bat" or ".cmd")
+        {
+            // cmd.exe reparses its command string, so never place arguments or HA data here.
+            // /D disables AutoRun and /V:OFF disables delayed environment expansion.
+            start.Arguments = $"/D /V:OFF /S /C \"\"{validated.ExecutablePath}\"\"";
+        }
+        else if (extension == ".ps1")
+        {
+            foreach (var argument in new[] { "-NoProfile", "-NonInteractive", "-File", validated.ExecutablePath })
+                start.ArgumentList.Add(argument);
+        }
+        else
+        {
+            foreach (var argument in validated.Arguments) start.ArgumentList.Add(argument);
+        }
         return start;
+    }
+
+    public static bool IsScript(CustomCommandDefinition command) =>
+        !Path.GetExtension(command.ExecutablePath).Equals(".exe", StringComparison.OrdinalIgnoreCase);
+
+    private static void ValidateScriptDirectory(string path)
+    {
+        var root = Path.GetPathRoot(path)!;
+        if (new DriveInfo(root).DriveType != DriveType.Fixed)
+            throw new ArgumentException("Choose a script on a fixed local drive.", "executablePath");
+        for (var directory = Path.GetDirectoryName(path); directory is not null && directory.Length > root.Length;
+             directory = Path.GetDirectoryName(directory))
+        {
+            if (File.GetAttributes(directory).HasFlag(FileAttributes.ReparsePoint))
+                throw new ArgumentException("Script folders cannot be symbolic links or reparse points.", "executablePath");
+        }
     }
 
     public static string[] ParseArguments(string? text) =>

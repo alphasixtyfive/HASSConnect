@@ -54,7 +54,7 @@ buttons for every command and uses confirmation prompts for disruptive actions.
 
 ## Custom commands
 
-You can also approve a local program and give it a command name. For example, a saved
+You can also approve a local program or script and give it a command name. For example, a saved
 command named `command_custom_open_music` is triggered with:
 
 ```yaml
@@ -63,7 +63,7 @@ data:
   message: command_custom_open_music
 ```
 
-The program and its arguments stay on the PC; the Home Assistant message cannot replace
+The file and any saved launch options stay on the PC; the Home Assistant message cannot replace
 them. The [custom-command guide](custom-commands.md) walks through setup, testing and
 troubleshooting.
 
@@ -72,8 +72,13 @@ troubleshooting.
 - Unknown messages remain ordinary notifications; they are never executed as commands.
 - Custom commands must be explicitly configured on the PC and individually enabled.
 - Custom command names, paths and arguments are validated before saving and again before execution.
-- Custom commands start the selected `.exe` directly, without a shell, elevation or remote arguments.
-- Only local absolute executable paths are accepted; UNC paths, relative paths and non-`.exe` targets are rejected.
+- `.exe` custom commands start directly, without an implicit shell or elevation request. `.bat` and `.cmd`
+  run through `cmd.exe`; `.ps1` runs through Windows PowerShell. Scripts do not accept
+  launch options or remote arguments. HASS Connect does not request administrator elevation.
+- Only local absolute `.exe`, `.bat`, `.cmd` and `.ps1` paths are accepted; UNC paths,
+  relative paths and symbolic links are rejected. Scripts must be on a fixed local drive.
+- Scripts have a five-minute runtime limit and concurrent-start limits. Their exit status
+  is recorded in the local diagnostic log without capturing output.
 - A custom command can start at most once every five seconds, with a global limit of ten starts per minute.
 - Disabled commands are ignored and recorded in the local diagnostic log.
 - Sleep, shutdown and restart are delayed briefly so Home Assistant can receive the delivery

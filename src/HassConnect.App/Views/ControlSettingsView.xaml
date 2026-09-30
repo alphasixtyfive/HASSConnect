@@ -21,8 +21,8 @@
                 BorderBrush="{ThemeResource SectionBorderBrush}" BorderThickness="0,0,0,1">
             <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
             <StackPanel Spacing="2" VerticalAlignment="Center">
-              <TextBlock Text="Trusted programs" Style="{StaticResource BodyTextBlockStyle}" />
-              <TextBlock Text="Let Home Assistant start approved apps on this PC."
+              <TextBlock Text="Trusted programs and scripts" Style="{StaticResource BodyTextBlockStyle}" />
+              <TextBlock Text="Let Home Assistant start approved programs or scripts on this PC."
                          Style="{StaticResource CaptionTextBlockStyle}" TextWrapping="Wrap"
                          Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
             </StackPanel>
