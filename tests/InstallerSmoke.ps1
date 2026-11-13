@@ -32,7 +32,8 @@ function Assert-Removed($process) {
     if ((Test-Path -LiteralPath $app) -or (Test-Path -LiteralPath $shortcut)) {
         throw 'Uninstall left the app or Start-menu shortcut.'
     }
-    if (Get-ItemPropertyValue -LiteralPath $runKey -Name HassConnect -ErrorAction SilentlyContinue) {
+    $startup = Get-ItemProperty -LiteralPath $runKey -ErrorAction SilentlyContinue
+    if ($startup -and $startup.PSObject.Properties['HassConnect']) {
         throw 'Uninstall left the startup entry.'
     }
 }
@@ -42,6 +43,7 @@ Run-Setup $setup '/install'
 $running = Start-InstalledApp
 Run-Setup $setup '/uninstall'
 Assert-Removed $running
+Write-Host 'Fresh installation, launch and removal passed.'
 
 # Download the preceding published version only when it is older than the candidate.
 $releaseText = & gh release view --json tagName,assets
@@ -61,6 +63,7 @@ $expected = (Get-Content -LiteralPath (Join-Path $previousDirectory 'SHA256SUMS.
 $actual = (Get-FileHash -LiteralPath $previousSetup[0].FullName -Algorithm SHA256).Hash.ToLowerInvariant()
 if ($expected -cne "$actual  $($previousSetup[0].Name)") { throw 'Preceding installer checksum mismatch.' }
 Run-Setup $previousSetup[0].FullName '/install'
+Write-Host "Installed preceding release $($previous.tagName)."
 
 # Use synthetic, disconnected data: no real token or Home Assistant server.
 New-Item -ItemType Directory -Path $data -Force | Out-Null
