@@ -60,7 +60,7 @@ internal sealed class HaWebSocket : IAsyncDisposable
         return document.RootElement.Clone();
     }
 
-    public async Task<JsonElement> ReadResultAsync(int id, CancellationToken ct)
+    public async Task<JsonElement> ReadResultAsync(int id, CancellationToken ct, bool registrationRequest = false)
     {
         while (true)
         {
@@ -68,14 +68,25 @@ internal sealed class HaWebSocket : IAsyncDisposable
             if (MessageType(message) != "result" || !message.TryGetProperty("id", out var messageId) ||
                 !messageId.TryGetInt32(out var resultId) || resultId != id)
                 continue;
-            if (!message.TryGetProperty("success", out var success) || success.ValueKind != JsonValueKind.True)
-                throw new InvalidDataException("Home Assistant rejected a WebSocket request.");
+            EnsureSuccess(message, registrationRequest);
             return message.TryGetProperty("result", out var result) ? result : default;
         }
     }
 
     public static string? MessageType(JsonElement message) =>
-        message.TryGetProperty("type", out var type) ? type.GetString() : null;
+        message.ValueKind == JsonValueKind.Object && message.TryGetProperty("type", out var type) &&
+        type.ValueKind == JsonValueKind.String ? type.GetString() : null;
+
+    internal static void EnsureSuccess(JsonElement message, bool registrationRequest = false)
+    {
+        if (message.TryGetProperty("success", out var success) && success.ValueKind == JsonValueKind.True) return;
+        var code = message.TryGetProperty("error", out var error) && error.ValueKind == JsonValueKind.Object &&
+            error.TryGetProperty("code", out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
+        if (code is "unauthorized" or "auth_invalid")
+            throw new HttpRequestException("Home Assistant rejected the access token.", null, HttpStatusCode.Unauthorized);
+        if (code == "not_found" && registrationRequest) throw new RegistrationRemovedException();
+        throw new InvalidDataException("Home Assistant rejected a WebSocket request.");
+    }
 
     private static Uri WebSocketUri(Uri server) =>
         new UriBuilder(new Uri(server, "api/websocket")) { Scheme = server.Scheme == "https" ? "wss" : "ws" }.Uri;

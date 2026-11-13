@@ -44,7 +44,7 @@ public sealed partial class UpdateSettingsView : UserControl
 
     private async void Loaded_CheckUpdates(object sender, RoutedEventArgs args)
     {
-        if (_checked) return;
+        if (_checked || UserDataDirectory.IsIsolated) return;
         _checked = true;
         await CheckAsync();
     }
@@ -142,7 +142,7 @@ public sealed partial class UpdateSettingsView : UserControl
         _busy = busy;
         UpdateButton.IsEnabled = !busy;
         UpdateButton.Content = busy ? "Please wait…" : _update?.Package is not null ? "Install update" :
-            _update?.ReleasePage is not null ? "View release" : "Check updates";
+            _update?.ReleasePage is not null ? "View release" : "Check now";
     }
 
     private static HttpClient CreateClient()

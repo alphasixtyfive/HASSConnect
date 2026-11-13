@@ -44,6 +44,9 @@ public sealed class HaClient : IDisposable
 
     public async Task<IReadOnlyList<QuickActionEntity>> GetQuickActionEntitiesAsync(CancellationToken ct)
     {
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        deadline.CancelAfter(_http.Timeout);
+        ct = deadline.Token;
         using var request = Authorized(HttpMethod.Get, "api/states");
         using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct)
             .ConfigureAwait(false);
@@ -69,6 +72,9 @@ public sealed class HaClient : IDisposable
     public async Task<IReadOnlyDictionary<string, string>> GetQuickActionStatesAsync(
         IReadOnlyCollection<string> entityIds, CancellationToken ct)
     {
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        deadline.CancelAfter(_http.Timeout);
+        ct = deadline.Token;
         ArgumentNullException.ThrowIfNull(entityIds);
         if (entityIds.Count > QuickActionPolicy.MaximumActions || entityIds.Any(string.IsNullOrWhiteSpace))
             throw new ArgumentException("Choose up to eight configured entities.", nameof(entityIds));

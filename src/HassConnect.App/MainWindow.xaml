@@ -142,7 +142,10 @@
                       <TextBlock Text="Access token" VerticalAlignment="Center" />
                       <Button Background="Transparent" BorderThickness="0" Padding="3" MinWidth="0" MinHeight="24" AutomationProperties.Name="How to get an access token">
                         <FontIcon Glyph="&#xE946;" FontSize="12" />
-                        <Button.Flyout><Flyout><TextBlock Text="In Home Assistant, open your profile, select Security, then create a long-lived access token." TextWrapping="Wrap" MaxWidth="280" /></Flyout></Button.Flyout>
+                        <Button.Flyout><Flyout><StackPanel Spacing="8" MaxWidth="280">
+                          <TextBlock Text="Create a long-lived access token in your Home Assistant profile." TextWrapping="Wrap" />
+                          <HyperlinkButton Content="Open profile" Click="OpenTokenHelp_Click" Padding="0" HorizontalAlignment="Left" />
+                        </StackPanel></Flyout></Button.Flyout>
                       </Button>
                     </StackPanel>
                     <Grid Grid.Column="1" Grid.ColumnSpan="2">
@@ -157,11 +160,14 @@
                     <TextBlock x:Name="TokenError" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Style="{StaticResource FieldError}" AutomationProperties.LiveSetting="Polite" />
                   </Grid>
                   <TextBlock x:Name="ConnectionError" Style="{StaticResource FieldError}" AutomationProperties.LiveSetting="Polite" />
-                  <Button x:Name="SaveConnectionButton" Content="Connect" Style="{StaticResource AccentButtonStyle}" Click="Connect_Click" HorizontalAlignment="Right" />
+                  <Grid>
+                    <Button x:Name="ResetConnectionButton" Content="Reset connection" Click="ResetConnection_Click"
+                            HorizontalAlignment="Left" Visibility="Collapsed" />
+                    <Button x:Name="SaveConnectionButton" Content="Connect" Style="{StaticResource AccentButtonStyle}" Click="Connect_Click" HorizontalAlignment="Right" />
+                  </Grid>
                 </StackPanel>
                 <StackPanel Spacing="4">
                   <TextBlock x:Name="ConnectionDetail" Style="{StaticResource SupportingText}" />
-                  <TextBlock x:Name="LastReport" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                 </StackPanel>
               </StackPanel>
             </Border>
@@ -195,63 +201,6 @@
         <views:AboutView />
         <Border BorderBrush="{ThemeResource SectionBorderBrush}" BorderThickness="0,1,0,0" Padding="0,16,0,0">
           <Button Content="Close" Width="120" HorizontalAlignment="Right" Click="CloseAboutDialog_Click" />
-        </Border>
-      </StackPanel>
-    </ContentDialog>
-    <ContentDialog Grid.ColumnSpan="2" x:Name="CustomCommandDialog" Title="Custom command"
-                   KeyDown="CustomCommandDialog_KeyDown">
-      <StackPanel Spacing="12" MinWidth="420">
-        <TextBlock Text="Choose a trusted program or script that Home Assistant can start on this PC. Scripts run as your Windows account."
-                   TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-        <TextBox x:Name="CustomCommandNameBox" Header="Display name" MaxLength="60"
-                 PlaceholderText="Open music player" />
-        <StackPanel Spacing="4">
-          <TextBox x:Name="CustomCommandIdBox" Header="Home Assistant command" MaxLength="47"
-                   PlaceholderText="command_custom_open_music" />
-          <TextBlock Text="Send this exact value as the notification message in Home Assistant."
-                     Style="{StaticResource CaptionTextBlockStyle}"
-                     Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
-        </StackPanel>
-        <Grid ColumnSpacing="8">
-          <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-          <TextBox x:Name="CustomCommandExecutableBox" Header="Program or script (.exe, .bat, .cmd, .ps1)" PlaceholderText="C:\Scripts\action.ps1" />
-          <Button x:Name="BrowseCustomCommandButton" Grid.Column="1" Content="Browse…" VerticalAlignment="Bottom" Height="32"
-                  Click="BrowseCustomCommand_Click" />
-        </Grid>
-        <TextBox x:Name="CustomCommandArgumentsBox" Header="Optional launch options for .exe (one per line)"
-                 AcceptsReturn="True" TextWrapping="NoWrap" MinHeight="88"
-                 PlaceholderText="--profile&#x0a;Home Assistant" />
-        <TextBlock x:Name="CustomCommandError" Visibility="Collapsed" TextWrapping="Wrap"
-                   Foreground="{ThemeResource SystemFillColorCriticalBrush}" AutomationProperties.LiveSetting="Assertive" />
-        <StackPanel Spacing="6">
-          <Button x:Name="TestCustomCommandButton" Content="Test command" HorizontalAlignment="Left" Click="TestCustomCommand_Click" />
-          <TextBlock x:Name="CustomCommandTestStatus" Visibility="Collapsed" TextWrapping="Wrap"
-                     Foreground="{ThemeResource TextFillColorSecondaryBrush}" AutomationProperties.Name="Custom command test result"
-                     AutomationProperties.LiveSetting="Polite" />
-        </StackPanel>
-        <Border BorderBrush="{ThemeResource SectionBorderBrush}" BorderThickness="0,1,0,0"
-                Padding="0,16,0,0" Margin="0,4,0,0">
-          <Grid ColumnSpacing="8">
-            <Grid.ColumnDefinitions>
-              <ColumnDefinition Width="Auto" />
-              <ColumnDefinition Width="*" />
-              <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-            <Button x:Name="DeleteCustomCommandButton" Width="120" Visibility="Collapsed"
-                    Style="{StaticResource DangerButtonStyle}" Click="DeleteCustomCommand_Click"
-                    AutomationProperties.Name="Delete custom command">
-              <StackPanel Orientation="Horizontal" Spacing="8">
-                <FontIcon Glyph="&#xE74D;" FontSize="12" />
-                <TextBlock Text="Delete" />
-              </StackPanel>
-            </Button>
-            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
-              <Button x:Name="SaveCustomCommandButton" Content="Save" Width="120"
-                      Style="{StaticResource AccentButtonStyle}" Click="SaveCustomCommand_Click" />
-              <Button x:Name="CancelCustomCommandButton" Content="Cancel" Width="120"
-                      Click="CancelCustomCommand_Click" />
-            </StackPanel>
-          </Grid>
         </Border>
       </StackPanel>
     </ContentDialog>

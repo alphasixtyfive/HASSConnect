@@ -10,22 +10,26 @@ Home Assistant can run that saved command, but it cannot change the file or its 
 
 1. Open **Controls** and enable **PC control**.
 2. Under **Custom commands**, select **Add**.
-3. Give it a friendly name and a Home Assistant command name.
-4. Choose the program or script. Add fixed launch options only for a `.exe` program.
+3. Give it a name. HASS Connect suggests a command ID; use **Copy** when adding it to a Home Assistant automation.
+4. Choose the program or script. Optional arguments appear for `.exe` programs; put one argument on each line.
 5. Select **Test command** and check that the right thing happens.
 6. Select **Add**. Leave its switch on when you want Home Assistant to use it.
 
-Use the gear button beside an existing command to edit or delete it. The switch controls
+Existing command IDs stay fixed so your automations keep working. **Remove** removes
+the saved command, leaving its program or script on the PC. If saving fails, the editor
+keeps your input so you can correct the problem and retry.
+
+Use the gear button beside an existing command to edit or remove it. The switch controls
 whether Home Assistant may run that command without removing it.
 
 ## What to enter
 
-- **Display name** is the label shown in HASS Connect.
+- **Name** is the label shown in HASS Connect.
 - **Home Assistant command** starts with `command_custom_`. After that, use a lowercase
-  letter followed by lowercase letters, numbers or underscores. It cannot be renamed later.
+  letter, number or underscore, with up to 32 characters after the prefix. It cannot be renamed later.
 - **Program or script** is the full path to a local `.exe`, `.bat`, `.cmd` or `.ps1` file.
   Use **Browse** instead of typing the path when possible.
-- **Launch options** are available only for `.exe` files. They are fixed on this PC. Enter
+- **Arguments** are available only for `.exe` files. They are fixed on this PC. Enter
   one argument per line; a line containing spaces is still passed as one argument.
 
 HASS Connect accepts up to 20 commands and 16 launch options per `.exe` command. Scripts

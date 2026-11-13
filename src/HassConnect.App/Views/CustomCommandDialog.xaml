@@ -1,0 +1,69 @@
+<ContentDialog x:Class="HassConnect.App.Views.CustomCommandDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="Custom command"
+    Style="{StaticResource DefaultContentDialogStyle}"
+                   KeyDown="CustomCommandDialog_KeyDown">
+      <Grid x:Name="EditorLayout" MinWidth="420" RowSpacing="16">
+        <Grid.RowDefinitions><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+        <ScrollViewer x:Name="EditorScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+          <StackPanel Spacing="12">
+        <TextBlock Text="Choose a program or script for Home Assistant to run."
+                   TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+        <TextBox x:Name="CustomCommandNameBox" Header="Name" MaxLength="60" TextChanged="CommandName_Changed"
+                 PlaceholderText="Open music player" />
+        <StackPanel Spacing="4">
+          <Grid ColumnSpacing="8">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+            <TextBox x:Name="CustomCommandIdBox" Header="Home Assistant command" MaxLength="47"
+                     PlaceholderText="command_custom_open_music" />
+            <Button Grid.Column="1" Content="Copy" VerticalAlignment="Bottom" Click="CopyCommand_Click"
+                    AutomationProperties.Name="Copy Home Assistant command" />
+          </Grid>
+          <TextBlock Text="Use as the notification message in Home Assistant."
+                     Style="{StaticResource CaptionTextBlockStyle}"
+                     Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+        </StackPanel>
+        <Grid ColumnSpacing="8">
+          <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+          <TextBox x:Name="CustomCommandExecutableBox" Header="Program or script" TextChanged="CommandPath_Changed" PlaceholderText="C:\Scripts\action.ps1" />
+          <Button x:Name="BrowseCustomCommandButton" Grid.Column="1" Content="Browse…" VerticalAlignment="Bottom" Height="32"
+                  Click="BrowseCustomCommand_Click" />
+        </Grid>
+        <TextBox x:Name="CustomCommandArgumentsBox" Header="Arguments (optional, one per line)"
+                 AcceptsReturn="True" TextWrapping="NoWrap" MinHeight="64" />
+        <TextBlock x:Name="CustomCommandError" Visibility="Collapsed" TextWrapping="Wrap"
+                   Foreground="{ThemeResource SystemFillColorCriticalBrush}" AutomationProperties.LiveSetting="Assertive" />
+        <StackPanel Spacing="6">
+          <Button x:Name="TestCustomCommandButton" Content="Test command" HorizontalAlignment="Left" Click="TestCustomCommand_Click" />
+          <TextBlock x:Name="CustomCommandTestStatus" Visibility="Collapsed" TextWrapping="Wrap"
+                     Foreground="{ThemeResource TextFillColorSecondaryBrush}" AutomationProperties.Name="Custom command test result"
+                     AutomationProperties.LiveSetting="Polite" />
+        </StackPanel>
+          </StackPanel>
+        </ScrollViewer>
+        <Border Grid.Row="1" BorderBrush="{ThemeResource SectionBorderBrush}" BorderThickness="0,1,0,0"
+                Padding="0,16,0,0">
+          <Grid ColumnSpacing="8">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto" />
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Button x:Name="DeleteCustomCommandButton" Width="120" Visibility="Collapsed"
+                    Style="{StaticResource DangerButtonStyle}" Click="DeleteCustomCommand_Click"
+                    AutomationProperties.Name="Remove custom command">
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <FontIcon Glyph="&#xE74D;" FontSize="12" />
+                <TextBlock Text="Remove" />
+              </StackPanel>
+            </Button>
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
+              <Button x:Name="SaveCustomCommandButton" Content="Save" Width="120"
+                      Style="{StaticResource AccentButtonStyle}" Click="SaveCustomCommand_Click" />
+              <Button x:Name="CancelCustomCommandButton" Content="Cancel" Width="120"
+                      Click="CancelCustomCommand_Click" />
+            </StackPanel>
+          </Grid>
+        </Border>
+      </Grid>
+    </ContentDialog>

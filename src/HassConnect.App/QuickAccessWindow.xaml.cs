@@ -30,6 +30,7 @@ internal sealed partial class QuickAccessWindow : Window
     internal event Action<QuickActionDefinition>? ActionRequested;
     internal event Action? EditRequested;
     internal event Action? OpenHomeAssistantRequested;
+    internal event Action? Hidden;
 
     internal bool IsVisible { get; private set; }
 
@@ -94,6 +95,7 @@ internal sealed partial class QuickAccessWindow : Window
         _actionPending = false;
         IsVisible = false;
         AppWindow.Hide();
+        Hidden?.Invoke();
     }
 
     private void ConfigureDwmFrame()

@@ -6,6 +6,9 @@ Enable notifications on the Notifications page. HASS Connect receives messages o
 
 The app must remain running, including in the tray, with the PC awake and connected. Messages are not queued while offline. Windows notification settings and Do not disturb control whether a banner or sound appears. The **Send test** button checks local Windows delivery; sending from Home Assistant checks the full connection.
 
+The connection recovers automatically if Home Assistant is unavailable at startup or
+temporarily disconnects. A rejected access token requires an update in Settings.
+
 Windows registration supplies the **HASS Connect** sender name and small header
 icon automatically. No app certificate or identity package is needed.
 

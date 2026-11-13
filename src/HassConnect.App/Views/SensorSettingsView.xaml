@@ -7,6 +7,8 @@
       <local:SettingsRow x:Name="MasterRow" Title="Enable sensors" Glyph="&#xE9D9;"
                          ShowDivider="False" ToggleChanged="MasterRow_Changed" />
     </Border>
+    <TextBlock x:Name="FreshnessText" FontSize="12" TextWrapping="Wrap" Visibility="Collapsed"
+               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
     <StackPanel x:Name="SensorGroups" Spacing="16" />
   </StackPanel>
 </UserControl>

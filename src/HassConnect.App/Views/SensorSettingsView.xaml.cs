@@ -41,9 +41,9 @@ public sealed partial class SensorSettingsView : UserControl
             var supported = spec.Sensors.All(sensor => _supported.Contains(sensor.Id));
             var enabled = spec.Sensors.Count(sensor => settings.EnabledSensors.Contains(sensor.Id));
             if (!_busy.Contains(spec.Key)) row.IsOn = enabled > 0;
-            row.Opacity = !_sharingEnabled || !supported ? 0.55 : 1;
-            row.ValueText = !supported ? "Not available on this PC" : !_sharingEnabled ? "Disabled" :
-                enabled == 0 ? "Off" : spec.Sensors.Count == 1
+            row.Opacity = !supported ? 0.55 : 1;
+            row.ValueText = !supported ? "Not available on this PC" :
+                enabled == 0 || !_sharingEnabled ? "" : spec.Sensors.Count == 1
                     ? FormatSensorValue(spec.Sensors[0], values)
                     : FormatDriveValue(spec, enabled, values);
         }
@@ -54,6 +54,12 @@ public sealed partial class SensorSettingsView : UserControl
     {
         if (busy) _busy.Add(id); else _busy.Remove(id);
         RefreshEnabledState();
+    }
+
+    public void SetFreshness(string? message)
+    {
+        FreshnessText.Text = message ?? "";
+        FreshnessText.Visibility = string.IsNullOrEmpty(message) ? Visibility.Collapsed : Visibility.Visible;
     }
 
     public void SetMasterBusy(bool busy)
@@ -139,7 +145,7 @@ public sealed partial class SensorSettingsView : UserControl
     {
         MasterRow.IsToggleEnabled = !_masterBusy;
         foreach (var (key, row) in _rows)
-            row.IsToggleEnabled = _sharingEnabled && !_masterBusy && !_busy.Contains(key) &&
+            row.IsToggleEnabled = !_masterBusy && !_busy.Contains(key) &&
                 _rowSpecs[key].Sensors.All(sensor => _supported.Contains(sensor.Id));
     }
 

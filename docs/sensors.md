@@ -4,6 +4,9 @@
 
 Sensors are individually opt-in. Enable sensors pauses collection while preserving
 individual choices. Reports normally run every 15 seconds while awake and connected.
+Selections can be changed while paused or offline. The app saves them immediately and
+applies them when reporting resumes; later changes made in Home Assistant are still
+respected. A single status line shows when readings were last updated.
 
 Display state reports `on`, `dimmed` or `off` for the current Windows session using
 GUID_SESSION_DISPLAY_STATUS. It stays unknown until Windows supplies a value. This

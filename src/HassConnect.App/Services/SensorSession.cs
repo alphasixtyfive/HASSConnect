@@ -15,6 +15,7 @@ internal sealed class SensorSession : IAsyncDisposable
     private readonly SettingsStore _store;
     private readonly DisplayStateMonitor _display;
     private readonly SemaphoreSlim _gate = new(1, 1);
+    private readonly SemaphoreSlim _publishRequested = new(0, 1);
     private readonly CancellationTokenSource _lifetime = new();
     private readonly Task _loop;
     private readonly Task _messageReceiverStartup;
@@ -49,6 +50,7 @@ internal sealed class SensorSession : IAsyncDisposable
     public bool RemoteMessagesConnected => _notifications.Connected;
     public bool NotificationsSupported => _notifications.Supported;
     public bool IsRegistered => _credentials?.WebhookId is not null;
+    public string? RecoveryMessage => _store.RecoveryMessage;
     internal string? GetSavedAccessToken() => _credentials?.AccessToken;
     public IReadOnlyDictionary<string, object?> Values => new Dictionary<string, object?>(_values);
 
@@ -59,7 +61,6 @@ internal sealed class SensorSession : IAsyncDisposable
         _settings = store.LoadSettings();
         _credentials = store.LoadCredentials();
         _display = new DisplayStateMonitor(window);
-        _store.Save(_settings);
         if (_credentials?.WebhookId is not null && !string.IsNullOrWhiteSpace(_settings.ServerUrl))
         {
             var server = ServerAddress.Parse(_settings.ServerUrl);
@@ -101,8 +102,7 @@ internal sealed class SensorSession : IAsyncDisposable
                     }
                 }
                 var credentials = new Credentials(credential, webhook);
-                _store.Save(next);
-                _store.SaveCredentials(credentials);
+                _store.SaveConnection(next, credentials);
                 _client?.Dispose();
                 _client = client;
                 _credentials = credentials;
@@ -111,9 +111,9 @@ internal sealed class SensorSession : IAsyncDisposable
                 _suspended = false;
             }
             catch { client.Dispose(); throw; }
-            await PublishAsync(_lifetime.Token);
+            RequestPublish();
             try { await _notifications.ConfigureAsync(_settings, _credentials, _lifetime.Token); }
-            catch (Exception ex) when (ex is not OperationCanceledException) { AppLog.Write("Notification startup", ex.GetType().Name); }
+            catch (Exception ex) when (ex is not OperationCanceledException) { AppLog.Write("Notification startup", ex); }
         }
         catch (Exception ex)
         {
@@ -125,73 +125,40 @@ internal sealed class SensorSession : IAsyncDisposable
         finally { _gate.Release(); }
     }
 
-    public async Task SetEnabledAsync(string id, bool enabled)
+    public Task SetEnabledAsync(string id, bool enabled) => SetSensorChoicesAsync([id], enabled);
+
+    public Task SetDriveSensorsEnabledAsync(IReadOnlyCollection<string> ids, bool enabled)
+    {
+        ArgumentNullException.ThrowIfNull(ids);
+        if (!DriveSensor.IsPair(ids.Distinct(StringComparer.Ordinal).ToArray()))
+            throw new ArgumentException("Choose a drive's usage and free-space sensors.", nameof(ids));
+        return SetSensorChoicesAsync(ids, enabled);
+    }
+
+    private async Task SetSensorChoicesAsync(IReadOnlyCollection<string> ids, bool enabled)
     {
         await _gate.WaitAsync(_lifetime.Token);
         try
         {
-            if (Paused) throw new InvalidOperationException("Turn on Enable sensors before changing individual sensors.");
-            var definition = AvailableSensors().SingleOrDefault(sensor => sensor.Id == id)
-                ?? throw new InvalidOperationException("That sensor is no longer available on this PC.");
-            if (_client is not null && _credentials?.WebhookId is { } webhook)
+            var available = AvailableSensors().Select(sensor => sensor.Id).ToHashSet(StringComparer.Ordinal);
+            if (ids.Any(id => !available.Contains(id)))
+                throw new InvalidOperationException("That sensor is no longer available on this PC.");
+            var sensors = new HashSet<string>(_settings.EnabledSensors, StringComparer.Ordinal);
+            var pending = new Dictionary<string, bool>(_settings.PendingSensorChanges, StringComparer.Ordinal);
+            foreach (var id in ids)
             {
-                if (enabled && NetworkSensors.Supports(id))
-                    await NetworkSensors.ConfigureTargetAsync(ServerAddress.Parse(_settings.ServerUrl).Host, _lifetime.Token);
-                var unknown = definition.Type == "binary_sensor" ? null : (object)"unknown";
-                var value = enabled ? ReadSensor(id).Value : _values.GetValueOrDefault(id, unknown);
-                await _client.RegisterSensorAsync(webhook, definition, value, enabled, _lifetime.Token);
+                if (enabled) sensors.Add(id); else sensors.Remove(id);
+                pending[id] = enabled;
             }
-            var sensors = new HashSet<string>(_settings.EnabledSensors);
-            if (enabled) sensors.Add(id); else sensors.Remove(id);
-            SaveSettings(_settings with { EnabledSensors = sensors });
-            if (!enabled)
+            SaveSettings(_settings with { EnabledSensors = sensors, PendingSensorChanges = pending });
+            foreach (var id in ids)
             {
                 _values.Remove(id);
                 ResetSensor(id);
             }
-            if (_client is not null) await PublishAsync(_lifetime.Token);
-            Changed?.Invoke();
+            RequestPublish();
         }
-        finally { _gate.Release(); }
-    }
-
-    public async Task SetDriveSensorsEnabledAsync(IReadOnlyCollection<string> ids, bool enabled)
-    {
-        ArgumentNullException.ThrowIfNull(ids);
-        var selectedIds = ids.Distinct(StringComparer.Ordinal).ToArray();
-        if (!DriveSensor.IsPair(selectedIds))
-            throw new ArgumentException("A drive selection must contain its usage and free-space sensors.", nameof(ids));
-
-        await _gate.WaitAsync(_lifetime.Token);
-        try
-        {
-            if (Paused) throw new InvalidOperationException("Turn on Enable sensors before changing individual sensors.");
-            var available = AvailableSensors().ToDictionary(sensor => sensor.Id, StringComparer.Ordinal);
-            if (selectedIds.Any(id => !available.ContainsKey(id)))
-                throw new InvalidOperationException("That drive is no longer available on this PC.");
-
-            if (_client is not null && _credentials?.WebhookId is { } webhook)
-                foreach (var id in selectedIds)
-                {
-                    var definition = available[id];
-                    var value = enabled ? ReadSensor(id).Value : _values.GetValueOrDefault(id, "unknown");
-                    await _client.RegisterSensorAsync(webhook, definition, value, enabled, _lifetime.Token);
-                }
-
-            var sensors = new HashSet<string>(_settings.EnabledSensors);
-            foreach (var id in selectedIds)
-                if (enabled) sensors.Add(id); else sensors.Remove(id);
-            SaveSettings(_settings with { EnabledSensors = sensors });
-            if (!enabled)
-                foreach (var id in selectedIds)
-                {
-                    _values.Remove(id);
-                    ResetSensor(id);
-                }
-            if (_client is not null) await PublishAsync(_lifetime.Token);
-            Changed?.Invoke();
-        }
-        finally { _gate.Release(); }
+        finally { _gate.Release(); Changed?.Invoke(); }
     }
 
     public async Task SetPausedAsync(bool paused)
@@ -200,12 +167,37 @@ internal sealed class SensorSession : IAsyncDisposable
         try
         {
             SaveSettings(_settings with { ShareSensors = !paused });
-            if (paused)
-                foreach (var sensor in AvailableSensors()) ResetSensor(sensor.Id);
-            if (_client is not null) await PublishAsync(_lifetime.Token);
-            Changed?.Invoke();
+            foreach (var sensor in AvailableSensors()) ResetSensor(sensor.Id);
+            RequestPublish();
         }
-        finally { _gate.Release(); }
+        finally { _gate.Release(); Changed?.Invoke(); }
+    }
+
+    public async Task ResetConnectionAsync()
+    {
+        await _gate.WaitAsync(_lifetime.Token);
+        try
+        {
+            var next = _settings with { ServerUrl = "", HomeAssistantPath = "" };
+            _store.SaveConnection(next, null);
+            _settings = next;
+            _credentials = null;
+            _client?.Dispose();
+            _client = null;
+            Volatile.Write(ref _quickActionConnection, null);
+            _suspended = false;
+            _values.Clear();
+            LastReported = null;
+            foreach (var sensor in AvailableSensors()) ResetSensor(sensor.Id);
+            await _notifications.ConfigureAsync(next, null, _lifetime.Token);
+            SetStatus(SessionState.Disconnected, "Enter your Home Assistant address and access token.", false);
+        }
+        finally { _gate.Release(); Changed?.Invoke(); }
+    }
+
+    private void RequestPublish()
+    {
+        if (_publishRequested.CurrentCount == 0) _publishRequested.Release();
     }
 
     public async Task SetThemeAsync(string theme)
@@ -215,17 +207,11 @@ internal sealed class SensorSession : IAsyncDisposable
         finally { _gate.Release(); }
     }
 
-    public async Task<IReadOnlyList<HomeAssistantDashboard>> GetDashboardsAsync()
+    public async Task<IReadOnlyList<HomeAssistantDashboard>> GetDashboardsAsync(CancellationToken cancellationToken = default)
     {
-        await _gate.WaitAsync(_lifetime.Token);
-        try
-        {
-            if (_credentials is null || string.IsNullOrWhiteSpace(_settings.ServerUrl))
-                throw new InvalidOperationException("Connect to Home Assistant first.");
-            return await DashboardCatalog.GetAsync(ServerAddress.Parse(_settings.ServerUrl),
-                _credentials.AccessToken, _lifetime.Token);
-        }
-        finally { _gate.Release(); }
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token, cancellationToken);
+        var connection = QuickActionConnectionOrThrow();
+        return await DashboardCatalog.GetAsync(connection.Server, connection.AccessToken, linked.Token);
     }
 
     public async Task SetHomeAssistantPathAsync(string? path)
@@ -254,11 +240,12 @@ internal sealed class SensorSession : IAsyncDisposable
     }
 
     public async Task<IReadOnlyDictionary<string, string>> GetQuickActionStatesAsync(
-        IReadOnlyCollection<string> entityIds)
+        IReadOnlyCollection<string> entityIds, CancellationToken cancellationToken = default)
     {
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token, cancellationToken);
         var connection = QuickActionConnectionOrThrow();
         using var client = new HaClient(connection.Server, connection.AccessToken);
-        return await client.GetQuickActionStatesAsync(entityIds, _lifetime.Token);
+        return await client.GetQuickActionStatesAsync(entityIds, linked.Token);
     }
 
     public async Task InvokeQuickActionAsync(QuickActionDefinition action)
@@ -451,7 +438,7 @@ internal sealed class SensorSession : IAsyncDisposable
             finally { _gate.Release(); }
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
-        catch (Exception ex) { AppLog.Write("Notification startup", ex.GetType().Name); }
+        catch (Exception ex) { AppLog.Write("Notification startup", ex); }
     }
 
     private async Task RunAsync(CancellationToken ct)
@@ -481,19 +468,31 @@ internal sealed class SensorSession : IAsyncDisposable
             catch (Exception ex)
             {
                 failures = Math.Min(failures + 1, 4);
-                AppLog.Write("Sensor connection", ex.GetType().Name);
+                AppLog.Write("Sensor connection", ex);
                 SetStatus(SessionState.Reconnecting, "Home Assistant is unavailable. HASS Connect will retry automatically.", false);
             }
             finally { _gate.Release(); }
-            await Task.Delay(TimeSpan.FromSeconds(failures == 0 ? 15 : Math.Min(60, 5 * (1 << failures))), ct);
+            await _publishRequested.WaitAsync(TimeSpan.FromSeconds(failures == 0 ? 15 : Math.Min(60, 5 * (1 << failures))), ct);
         }
     }
 
     private async Task PublishAsync(CancellationToken ct)
     {
         if (_client is null || _credentials?.WebhookId is not { } webhook) return;
-        var configuration = await _client.WebhookAsync(webhook, "get_config", new { }, ct);
         var supported = AvailableSensors();
+        if (!Paused && _settings.PendingSensorChanges.Count > 0)
+        {
+            var pending = new Dictionary<string, bool>(_settings.PendingSensorChanges, StringComparer.Ordinal);
+            foreach (var sensor in supported.Where(sensor => pending.ContainsKey(sensor.Id)))
+            {
+                // Apply explicit local intent before accepting later HA-side changes.
+                await _client.RegisterSensorAsync(webhook, sensor,
+                    sensor.Type == "binary_sensor" ? null : "unknown", pending[sensor.Id], ct);
+                pending.Remove(sensor.Id);
+            }
+            SaveSettings(_settings with { PendingSensorChanges = pending });
+        }
+        var configuration = await _client.WebhookAsync(webhook, "get_config", new { }, ct);
         var plan = SensorSyncPlan.Create(_settings, supported, ReadRemoteChoices(configuration));
         if (!plan.EnabledIds.SetEquals(_settings.EnabledSensors))
         {
@@ -553,7 +552,7 @@ internal sealed class SensorSession : IAsyncDisposable
         {
             // One unavailable Windows metric must not stop unrelated sensors or
             // make a healthy Home Assistant connection appear disconnected.
-            if (_sensorErrors.Add(id)) AppLog.Write($"Read sensor {id}", ex.GetType().Name);
+            if (_sensorErrors.Add(id)) AppLog.Write($"Read sensor {id}", ex);
             ResetSensor(id);
             return new(id, AvailableSensors().Single(sensor => sensor.Id == id).Type == "binary_sensor" ? null : "unknown");
         }

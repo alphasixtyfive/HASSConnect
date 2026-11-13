@@ -32,10 +32,13 @@ internal sealed class DesktopActivation : IDisposable
         // retained even while the first window and its services are starting.
         _current.Activated += Activated;
         // Registration must precede GetActivatedEventArgs for native toast activation.
-        try { _notifications.Register(); }
+        try { if (!UserDataDirectory.IsIsolated) _notifications.Register(); }
         catch (Exception ex) { AppLog.Write("Windows notification registration", $"0x{ex.HResult:X8} {ex.GetType().Name}"); }
         var activation = _current.GetActivatedEventArgs();
-        var instance = AppInstance.FindOrRegisterForKey("HASSConnect.Desktop");
+        var key = UserDataDirectory.IsIsolated
+            ? "HASSConnect.Test." + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(UserDataDirectory.Path)))
+            : "HASSConnect.Desktop";
+        var instance = AppInstance.FindOrRegisterForKey(key);
         if (!instance.IsCurrent)
         {
             // Await without blocking the UI apartment; Windows keeps the

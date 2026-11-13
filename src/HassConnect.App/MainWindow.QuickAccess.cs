@@ -22,6 +22,7 @@ public sealed partial class MainWindow
     private bool _quickShortcutSaving;
     private int _quickStateRequest;
     private int _quickInteractionGeneration;
+    private CancellationTokenSource? _quickStateCancellation;
 
     private void InitializeQuickAccess()
     {
@@ -38,6 +39,7 @@ public sealed partial class MainWindow
             QuickAccessPage.SetShortcutStatus("Saved shortcut is in use. Choose another.");
 
         _quickAccessWindow = new QuickAccessWindow();
+        _quickAccessWindow.Hidden += () => _quickStateCancellation?.Cancel();
         _quickAccessWindow.ActionRequested += action => _ = InvokeQuickActionAsync(action);
         _quickAccessWindow.EditRequested += () =>
         {
@@ -90,6 +92,7 @@ public sealed partial class MainWindow
     {
         if (_session is null || _quickAccessWindow is null) return;
         var generation = ++_quickInteractionGeneration;
+        _quickStateCancellation?.Cancel();
         _quickStateRequest++; // Ignore any state request started before this command.
         try
         {
@@ -119,10 +122,13 @@ public sealed partial class MainWindow
         if (_session is null || _quickAccessWindow is null) return;
         var request = ++_quickStateRequest;
         var generation = _quickInteractionGeneration;
+        _quickStateCancellation?.Cancel();
+        using var cancellation = new CancellationTokenSource();
+        _quickStateCancellation = cancellation;
         try
         {
             var states = await _session.GetQuickActionStatesAsync(
-                _session.Settings.QuickActions.Select(action => action.EntityId).Distinct().ToArray());
+                _session.Settings.QuickActions.Select(action => action.EntityId).Distinct().ToArray(), cancellation.Token);
             if (request == _quickStateRequest && IsCurrentQuickInteraction(generation))
                 _quickAccessWindow.SetEntityStates(states, preserveOptimistic);
         }
@@ -130,6 +136,10 @@ public sealed partial class MainWindow
         {
             if (request == _quickStateRequest && IsCurrentQuickInteraction(generation))
                 _quickAccessWindow.SetEntityStates(null, preserveOptimistic);
+        }
+        finally
+        {
+            if (ReferenceEquals(_quickStateCancellation, cancellation)) _quickStateCancellation = null;
         }
     }
 

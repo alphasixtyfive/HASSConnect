@@ -17,6 +17,23 @@ public static partial class CustomCommandPolicy
     public const int MaximumArguments = 16;
     private static readonly char[] BatchMetacharacters = ['&', '|', '<', '>', '^', '%', '!'];
 
+    public static string SuggestId(string name, IEnumerable<string> existingIds)
+    {
+        var words = new string(name.ToLowerInvariant().Select(c =>
+            c is >= 'a' and <= 'z' or >= '0' and <= '9' ? c : '_').ToArray());
+        var suffix = string.Join('_', words.Split('_', StringSplitOptions.RemoveEmptyEntries));
+        if (suffix.Length == 0) suffix = "action";
+        if (suffix.Length > 32) suffix = suffix[..32].TrimEnd('_');
+        var ids = existingIds.ToHashSet(StringComparer.Ordinal);
+        var candidate = "command_custom_" + suffix;
+        for (var number = 2; ids.Contains(candidate); number++)
+        {
+            var ending = "_" + number.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            candidate = "command_custom_" + suffix[..Math.Min(suffix.Length, 32 - ending.Length)] + ending;
+        }
+        return candidate;
+    }
+
     public static CustomCommandDefinition Create(
         string? id,
         string? name,

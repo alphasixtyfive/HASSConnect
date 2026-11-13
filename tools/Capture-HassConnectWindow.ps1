@@ -1,6 +1,7 @@
 param(
     [Parameter(Mandatory = $true)]
-    [string] $OutputPath
+    [string] $OutputPath,
+    [int] $ProcessId = 0
 )
 
 $ErrorActionPreference = 'Stop'
@@ -14,6 +15,29 @@ using System.Runtime.InteropServices;
 
 public static class HassConnectNativeCapture
 {
+    private delegate bool EnumWindowProc(IntPtr window, IntPtr state);
+    [DllImport("user32.dll")] private static extern bool EnumWindows(EnumWindowProc callback, IntPtr state);
+    [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr window);
+    [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
+
+    public static IntPtr FindMainWindow(uint processId)
+    {
+        IntPtr result = IntPtr.Zero;
+        long largest = 0;
+        EnumWindows((window, state) =>
+        {
+            uint owner;
+            GetWindowThreadProcessId(window, out owner);
+            RECT rect;
+            if (owner == processId && IsWindowVisible(window) && GetWindowRect(window, out rect))
+            {
+                long area = (long)(rect.Right - rect.Left) * (rect.Bottom - rect.Top);
+                if (area > largest) { largest = area; result = window; }
+            }
+            return true;
+        }, IntPtr.Zero);
+        return result;
+    }
     [StructLayout(LayoutKind.Sequential)]
     public struct RECT
     {
@@ -36,12 +60,13 @@ public static class HassConnectNativeCapture
 }
 
 $windows = @(Get-Process -Name 'HassConnect.App' -ErrorAction Stop |
-    Where-Object { $_.MainWindowHandle -ne 0 })
+    Where-Object { $_.MainWindowHandle -ne 0 -and ($ProcessId -eq 0 -or $_.Id -eq $ProcessId) })
 if ($windows.Count -ne 1) {
     throw "Expected one visible HASS Connect window; found $($windows.Count)."
 }
 
 $destination = [System.IO.Path]::GetFullPath($OutputPath)
+$windowHandle = [HassConnectNativeCapture]::FindMainWindow([uint32]$windows[0].Id)
 $directory = [System.IO.Path]::GetDirectoryName($destination)
 if (-not [System.IO.Directory]::Exists($directory)) {
     [System.IO.Directory]::CreateDirectory($directory) | Out-Null
@@ -53,7 +78,7 @@ $oldContext = [HassConnectNativeCapture]::SetThreadDpiAwarenessContext([IntPtr](
 try {
     $rect = New-Object HassConnectNativeCapture+RECT
     if (-not [HassConnectNativeCapture]::GetWindowRect(
-            $windows[0].MainWindowHandle,
+            $windowHandle,
             [ref] $rect)) {
         throw 'Could not read the HASS Connect window bounds.'
     }
@@ -75,7 +100,7 @@ try {
             try {
                 # PW_RENDERFULLCONTENT captures the WinUI window without desktop content.
                 if (-not [HassConnectNativeCapture]::PrintWindow(
-                        $windows[0].MainWindowHandle,
+                        $windowHandle,
                         $target,
                         2)) {
                     throw 'Native window capture failed.'

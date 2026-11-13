@@ -23,11 +23,8 @@ public sealed partial class MainWindow : Window
     private bool _loading = true;
     private bool _connecting;
     private bool _loadingDashboards;
+    private CancellationTokenSource? _dashboardCancellation;
     private bool _customCommandDialogOpen;
-    private bool _customCommandDeleteRequested;
-    private bool _customCommandSaving;
-    private bool _customCommandTesting;
-    private CustomCommandDefinition? _editingCustomCommand;
     private double _windowScale;
     internal event Action? QuitRequested;
 
@@ -76,10 +73,16 @@ public sealed partial class MainWindow : Window
             UpdatesPage.AvailabilityChanged += available =>
                 SettingsUpdateBadge.Visibility = available ? Visibility.Visible : Visibility.Collapsed;
             Refresh();
+            if (_session.RecoveryMessage is { } recovery)
+            {
+                ErrorBar.Severity = InfoBarSeverity.Warning;
+                ErrorBar.Message = recovery;
+                ErrorBar.IsOpen = true;
+            }
         }
         catch (Exception ex)
         {
-            AppLog.Write("Settings load", ex.GetType().Name);
+            AppLog.Write("Settings load", ex);
             ShowError("Unable to load saved settings. Your existing files have been preserved. Check the diagnostic logs.");
             SaveConnectionButton.IsEnabled = false;
         }
@@ -158,12 +161,18 @@ public sealed partial class MainWindow : Window
         SidebarStatusDot.Style = SettingsStatusDot.Style = (Style)Root.Resources[styleName];
         AutomationProperties.SetName(StatusIdentity, $"{_session.Settings.DeviceName}. {status}");
         ToolTipService.SetToolTip(StatusIdentity, $"{_session.Settings.DeviceName} · {status}");
-        ConnectionDetail.Text = _session.Detail;
+        var messagesUnavailable = _session.Connected &&
+            (_session.Settings.NotificationsEnabled || _session.Settings.PcControlEnabled) && !_session.RemoteMessagesConnected;
+        ConnectionDetail.Text = messagesUnavailable ? _session.RemoteMessageStatus : _session.Detail;
         var hasConnectionError = new[] { ServerError, DeviceError, TokenError, ConnectionError }.Any(error => error.Visibility == Visibility.Visible);
-        ConnectionDetail.Visibility = hasConnectionError || _session.Connected && !_session.Paused ? Visibility.Collapsed : Visibility.Visible;
-        LastReport.Text = _session.LastReported is { } last ? $"Last reported at {last:HH:mm:ss}" : "No sensors reported yet";
-        LastReport.Visibility = _session.IsRegistered ? Visibility.Visible : Visibility.Collapsed;
+        ConnectionDetail.Visibility = hasConnectionError || _session.Connected && !_session.Paused && !messagesUnavailable ? Visibility.Collapsed : Visibility.Visible;
         SensorsPage.Update(_session.Settings, _session.Values);
+        SensorsPage.SetFreshness(_session.Paused ? "Reporting paused" :
+            !_session.Connected ? _session.LastReported is { } previous
+                ? $"Offline · last updated {previous:HH:mm}" : "Connect to Home Assistant in Settings." :
+            _session.LastReported is { } reported ? $"Updated {reported:HH:mm}" : null);
+        ResetConnectionButton.Visibility = string.IsNullOrWhiteSpace(_session.Settings.ServerUrl) ? Visibility.Collapsed : Visibility.Visible;
+        ResetConnectionButton.IsEnabled = !_connecting;
         NotificationsPage.Update(_session.Settings, _session.NotificationsSupported, _session.IsRegistered,
             _session.RemoteMessagesConnected, _session.RemoteMessageStatus);
         ControlsPage.Update(_session.Settings, _session.IsRegistered,
@@ -212,12 +221,14 @@ public sealed partial class MainWindow : Window
         ClearConnectionErrors();
         try
         {
+            var firstConnection = !_session.IsRegistered;
             await _session.ConnectAsync(ServerBox.Text, DeviceBox.Text, TokenBox.Password);
             HideToken();
             TokenBox.Password = "";
             TokenBox.PlaceholderText = "Saved token";
             ServerBox.IsReadOnly = DeviceBox.IsReadOnly = _session.IsRegistered;
-            await LoadDashboardsAsync(showErrors: false);
+            if (firstConnection) SelectPage("sensors");
+            _ = LoadDashboardsAsync(showErrors: false);
         }
         catch (Exception ex) { ShowConnectionError(ex); }
         finally
@@ -226,6 +237,43 @@ public sealed partial class MainWindow : Window
             ServerBox.IsEnabled = DeviceBox.IsEnabled = TokenBox.IsEnabled = RevealTokenButton.IsEnabled = true;
             Refresh();
         }
+    }
+
+    private async void ResetConnection_Click(object sender, RoutedEventArgs args)
+    {
+        if (_session is null || _connecting) return;
+        if (!await DialogLayout.ShowConfirmationAsync(Root.XamlRoot, "Reset connection?",
+                "Your sensor and command choices will stay. Enter the server address and access token again to reconnect. The device in Home Assistant will remain.",
+                "Reset", defaultToPrimary: false)) return;
+        _connecting = true;
+        try
+        {
+            _dashboardCancellation?.Cancel();
+            await _session.ResetConnectionAsync();
+            _quickAccessWindow?.Hide();
+            ServerBox.IsReadOnly = DeviceBox.IsReadOnly = false;
+            ServerBox.Text = "";
+            TokenBox.Password = "";
+            TokenBox.PlaceholderText = "Paste your access token";
+            ToolTipService.SetToolTip(ServerBox, null);
+            ToolTipService.SetToolTip(DeviceBox, null);
+            ClearConnectionErrors();
+            ShowDashboardChoices([], "");
+            ServerBox.Focus(FocusState.Programmatic);
+        }
+        catch (Exception ex) { ShowError(UserMessage(ex)); }
+        finally { _connecting = false; Refresh(); }
+    }
+
+    private async void OpenTokenHelp_Click(object sender, RoutedEventArgs args)
+    {
+        try
+        {
+            var server = ServerAddress.Parse(ServerBox.Text);
+            if (!await Windows.System.Launcher.LaunchUriAsync(new Uri(server, "profile/security")))
+                throw new InvalidOperationException("Windows could not open Home Assistant.");
+        }
+        catch (Exception ex) { ShowConnectionError(ex); }
     }
 
     private void ConnectionField_Changed(object sender, TextChangedEventArgs args) => ConnectionInputChanged();
@@ -283,24 +331,33 @@ public sealed partial class MainWindow : Window
 
     private async Task LoadDashboardsAsync(bool showErrors)
     {
-        if (_session is null || !_session.IsRegistered || _loadingDashboards) return;
+        if (_session is null || !_session.IsRegistered) return;
+        _dashboardCancellation?.Cancel();
+        using var cancellation = new CancellationTokenSource();
+        _dashboardCancellation = cancellation;
         _loadingDashboards = true;
         DashboardBox.IsEnabled = RefreshDashboardsButton.IsEnabled = false;
         var savedPath = _session.Settings.HomeAssistantPath ?? "";
         ShowDashboardChoices([], savedPath);
         try
         {
-            ShowDashboardChoices(await _session.GetDashboardsAsync(), savedPath);
+            var dashboards = await _session.GetDashboardsAsync(cancellation.Token);
+            if (!cancellation.IsCancellationRequested) ShowDashboardChoices(dashboards, savedPath);
         }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
         catch (Exception ex)
         {
-            AppLog.Write("Dashboard list", ex.GetType().Name);
+            AppLog.Write("Dashboard list", ex);
             if (showErrors) ShowError(UserMessage(ex));
         }
         finally
         {
-            _loadingDashboards = false;
-            DashboardBox.IsEnabled = RefreshDashboardsButton.IsEnabled = _session.IsRegistered;
+            if (ReferenceEquals(_dashboardCancellation, cancellation))
+            {
+                _dashboardCancellation = null;
+                _loadingDashboards = false;
+                DashboardBox.IsEnabled = RefreshDashboardsButton.IsEnabled = _session.IsRegistered;
+            }
         }
     }
 
@@ -309,7 +366,7 @@ public sealed partial class MainWindow : Window
         var choices = new List<HomeAssistantDashboard> { new("Default Home Assistant page", "") };
         choices.AddRange(dashboards);
         if (savedPath.Length > 0 && choices.All(choice => !string.Equals(choice.Path, savedPath, StringComparison.OrdinalIgnoreCase)))
-            choices.Add(new($"Saved dashboard ({savedPath})", savedPath));
+            choices.Add(new(savedPath, savedPath));
         DashboardBox.ItemsSource = choices;
         DashboardBox.SelectedItem = choices.First(choice =>
             string.Equals(choice.Path, savedPath, StringComparison.OrdinalIgnoreCase));
@@ -504,203 +561,28 @@ public sealed partial class MainWindow : Window
     {
         if (_session is null || _customCommandDialogOpen) return;
         _customCommandDialogOpen = true;
-        try { await ShowCustomCommandDialogCoreAsync(id); }
-        finally
+        try
         {
-            _editingCustomCommand = null;
-            _customCommandDialogOpen = false;
-        }
-    }
-
-    private async Task ShowCustomCommandDialogCoreAsync(string? id)
-    {
-        if (_session is null) return;
-        var existing = id is null
-            ? null
-            : _session.Settings.CustomCommands.SingleOrDefault(command => command.Id == id);
-        if (id is not null && existing is null) return;
-
-        CustomCommandDialog.XamlRoot = Root.XamlRoot;
-        CustomCommandDialog.Title = existing is null ? "Add custom command" : "Edit custom command";
-        SaveCustomCommandButton.Content = existing is null ? "Add" : "Save";
-        DeleteCustomCommandButton.Visibility = existing is null ? Visibility.Collapsed : Visibility.Visible;
-        CustomCommandNameBox.Text = existing?.Name ?? "";
-        CustomCommandIdBox.Text = existing?.Id ?? "command_custom_";
-        CustomCommandIdBox.IsReadOnly = existing is not null;
-        CustomCommandExecutableBox.Text = existing?.ExecutablePath ?? "";
-        CustomCommandArgumentsBox.Text = existing is null ? "" : string.Join(Environment.NewLine, existing.Arguments);
-        CustomCommandError.Visibility = Visibility.Collapsed;
-        CustomCommandTestStatus.Visibility = Visibility.Collapsed;
-        _editingCustomCommand = existing;
-        _customCommandDeleteRequested = false;
-        _customCommandSaving = false;
-        _customCommandTesting = false;
-        SetCustomCommandDialogEnabled(true);
-        while (true)
-        {
-            await CustomCommandDialog.ShowAsync();
-            if (!_customCommandDeleteRequested) return;
-
-            var confirmed = await DialogLayout.ShowConfirmationAsync(
-                Root.XamlRoot,
-                "Delete custom command?",
-                $"Delete “{existing!.Name}”? Home Assistant calls using {existing.Id} will stop working.",
-                "Delete",
-                defaultToPrimary: false,
-                destructive: true);
-            if (!confirmed)
+            var dialog = new CustomCommandDialog(_session, _windowHandle)
             {
-                _customCommandDeleteRequested = false;
-                continue;
-            }
-
-            try { await _session.RemoveCustomCommandAsync(existing.Id); }
-            catch (Exception ex) { ShowError(UserMessage(ex)); }
-            finally { Refresh(); }
-            return;
+                XamlRoot = Root.XamlRoot, RequestedTheme = Root.ActualTheme
+            };
+            await dialog.EditAsync(id);
         }
+        catch (Exception ex) { ShowError(UserMessage(ex)); }
+        finally { _customCommandDialogOpen = false; Refresh(); }
     }
 
-    private async void SaveCustomCommand_Click(object sender, RoutedEventArgs args) =>
-        await SaveCustomCommandAsync();
-
-    private void DeleteCustomCommand_Click(object sender, RoutedEventArgs args)
+    private void OpenLogs_Click(object sender, RoutedEventArgs e)
     {
-        if (_editingCustomCommand is null || _customCommandSaving) return;
-        _customCommandDeleteRequested = true;
-        CustomCommandDialog.Hide();
+        try { Process.Start(new ProcessStartInfo("explorer.exe", AppLog.DataDirectory) { UseShellExecute = true }); }
+        catch (Exception ex) { ShowError(UserMessage(ex)); }
     }
-
-    private void CancelCustomCommand_Click(object sender, RoutedEventArgs args)
-    {
-        if (!_customCommandSaving) CustomCommandDialog.Hide();
-    }
-
-    private async void CustomCommandDialog_KeyDown(object sender, KeyRoutedEventArgs args)
-    {
-        if (_customCommandSaving || _customCommandTesting) return;
-        if (args.Key == Windows.System.VirtualKey.Escape)
-        {
-            args.Handled = true;
-            CustomCommandDialog.Hide();
-            return;
-        }
-        if (args.Key != Windows.System.VirtualKey.Enter) return;
-        var focused = FocusManager.GetFocusedElement(Root.XamlRoot);
-        if (ReferenceEquals(focused, CustomCommandArgumentsBox) || focused is Button) return;
-        args.Handled = true;
-        await SaveCustomCommandAsync();
-    }
-
-    private async Task SaveCustomCommandAsync()
-    {
-        if (_session is null || _customCommandSaving) return;
-
-        _customCommandSaving = true;
-        SetCustomCommandDialogEnabled(false);
-        try
-        {
-            var command = ReadCustomCommandDialog(_editingCustomCommand?.Enabled ?? true);
-            if (_editingCustomCommand is null && _session.Settings.CustomCommands.Any(item => item.Id == command.Id))
-                throw new ArgumentException("That Home Assistant command is already configured.", "id");
-            await _session.SaveCustomCommandAsync(command);
-            CustomCommandError.Visibility = Visibility.Collapsed;
-            Refresh();
-            CustomCommandDialog.Hide();
-        }
-        catch (Exception ex) when (ex is ArgumentException or InvalidDataException or InvalidOperationException)
-        {
-            CustomCommandError.Text = ex.Message;
-            CustomCommandError.Visibility = Visibility.Visible;
-            FocusInvalidCustomCommandField(ex);
-        }
-        finally
-        {
-            _customCommandSaving = false;
-            SetCustomCommandDialogEnabled(true);
-        }
-    }
-
-    private void SetCustomCommandDialogEnabled(bool enabled)
-    {
-        var available = enabled && !_customCommandSaving && !_customCommandTesting;
-        SaveCustomCommandButton.IsEnabled = available;
-        DeleteCustomCommandButton.IsEnabled = available;
-        CancelCustomCommandButton.IsEnabled = available;
-        BrowseCustomCommandButton.IsEnabled = available;
-        TestCustomCommandButton.IsEnabled = available;
-    }
-
-    private void FocusInvalidCustomCommandField(Exception exception)
-    {
-        var field = (exception as ArgumentException)?.ParamName switch
-        {
-            "id" => CustomCommandIdBox,
-            "name" => CustomCommandNameBox,
-            "executablePath" => CustomCommandExecutableBox,
-            "arguments" => CustomCommandArgumentsBox,
-            _ => null
-        };
-        field?.Focus(FocusState.Programmatic);
-    }
-
-    private CustomCommandDefinition ReadCustomCommandDialog(bool enabled)
-    {
-        var arguments = CustomCommandPolicy.ParseArguments(CustomCommandArgumentsBox.Text);
-        return CustomCommandPolicy.Create(
-            CustomCommandIdBox.Text,
-            CustomCommandNameBox.Text,
-            CustomCommandExecutableBox.Text,
-            arguments,
-            enabled,
-            requireExecutable: true);
-    }
-
-    private async void TestCustomCommand_Click(object sender, RoutedEventArgs args)
-    {
-        if (_session is null || _customCommandSaving || _customCommandTesting) return;
-        _customCommandTesting = true;
-        SetCustomCommandDialogEnabled(false);
-        CustomCommandError.Visibility = Visibility.Collapsed;
-        CustomCommandTestStatus.Visibility = Visibility.Collapsed;
-        try
-        {
-            var command = ReadCustomCommandDialog(_editingCustomCommand?.Enabled ?? true);
-            await _session.TestCustomCommandAsync(command);
-            CustomCommandTestStatus.Text = "Started. Confirm it behaved as expected before saving.";
-            CustomCommandTestStatus.Visibility = Visibility.Visible;
-        }
-        catch (Exception ex) when (ex is ArgumentException or InvalidDataException or InvalidOperationException or
-            IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
-        {
-            CustomCommandError.Text = ex.Message;
-            CustomCommandError.Visibility = Visibility.Visible;
-            FocusInvalidCustomCommandField(ex);
-        }
-        finally
-        {
-            _customCommandTesting = false;
-            SetCustomCommandDialogEnabled(true);
-        }
-    }
-
-    private async void BrowseCustomCommand_Click(object sender, RoutedEventArgs args)
-    {
-        var picker = new Windows.Storage.Pickers.FileOpenPicker();
-        WinRT.Interop.InitializeWithWindow.Initialize(picker, _windowHandle);
-        picker.FileTypeFilter.Add(".exe");
-        picker.FileTypeFilter.Add(".bat");
-        picker.FileTypeFilter.Add(".cmd");
-        picker.FileTypeFilter.Add(".ps1");
-        var file = await picker.PickSingleFileAsync();
-        if (file is not null) CustomCommandExecutableBox.Text = file.Path;
-    }
-
-    private void OpenLogs_Click(object sender, RoutedEventArgs e) => Process.Start(new ProcessStartInfo("explorer.exe", AppLog.DataDirectory) { UseShellExecute = true });
     internal async Task QuitAsync()
     {
         if (_quitting) return;
         _quitting = true;
+        _dashboardCancellation?.Cancel();
         NotificationsPage.ClearTransientFeedback();
         _tray.Dispose();
         _quickAccessWindow?.Hide();
@@ -708,19 +590,20 @@ public sealed partial class MainWindow : Window
         {
             if (_session is not null) await _session.DisposeAsync();
         }
-        catch (Exception ex) { AppLog.Write("Application shutdown", ex.GetType().Name); }
+        catch (Exception ex) { AppLog.Write("Application shutdown", ex); }
         finally { QuitRequested?.Invoke(); }
     }
 
-    private void ShowError(string message) { ErrorBar.Message = message; ErrorBar.IsOpen = true; }
-    private static string UserMessage(Exception ex)
+    private void ShowError(string message) { ErrorBar.Severity = InfoBarSeverity.Error; ErrorBar.Message = message; ErrorBar.IsOpen = true; }
+    internal static string UserMessage(Exception ex)
     {
-        AppLog.Write("Operation failed", ex.GetType().Name);
+        AppLog.Write("Operation failed", ex);
         return ex switch
         {
             ArgumentException { ParamName: "token" } => "Paste a complete access token without spaces or line breaks.",
             ArgumentException { ParamName: "deviceName" } => "Enter a device name.",
-            ArgumentException or InvalidOperationException => ex.Message,
+            ArgumentException => ex.Message.Split(" (Parameter '", StringSplitOptions.None)[0],
+            InvalidOperationException or UnsupportedSettingsVersionException => ex.Message,
             UnauthorizedAccessException => "Windows denied access to the app's files. Check the folder permissions.",
             IOException => "The app could not save or read its files. Check free disk space and folder access.",
             _ => ConnectionErrorMessage.Describe(ex)

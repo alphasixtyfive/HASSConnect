@@ -42,19 +42,22 @@ In Home Assistant, open your profile and select **Security** to create a long-li
 Closing the window keeps the app in the tray. Click the tray icon for your quick actions,
 or right-click it to open the app, open Home Assistant, or quit.
 
+To change servers, use **Settings → Reset connection**, then enter the new address and
+token. Your local choices stay; the previous device remains in Home Assistant.
+
 ## Screenshots
 
 <table>
   <tr>
     <td><a href="docs/images/sensors.png"><img src="docs/images/sensors.png" width="390" alt="HASS Connect Sensors page"></a></td>
-    <td><a href="docs/images/notifications.png"><img src="docs/images/notifications.png" width="390" alt="HASS Connect Notifications page"></a></td>
+    <td><a href="docs/images/quick-access.png"><img src="docs/images/quick-access.png" width="390" alt="HASS Connect Quick access settings"></a></td>
   </tr>
   <tr>
     <td align="center"><strong>Sensors</strong></td>
-    <td align="center"><strong>Windows notifications</strong></td>
+    <td align="center"><strong>Quick access</strong></td>
   </tr>
   <tr>
-    <td><a href="docs/images/controls.png"><img src="docs/images/controls.png" width="390" alt="HASS Connect Controls page with custom commands"></a></td>
+    <td><a href="docs/images/controls.png"><img src="docs/images/controls.png" width="390" alt="HASS Connect Controls page"></a></td>
     <td><a href="docs/images/custom-command-editor.png"><img src="docs/images/custom-command-editor.png" width="390" alt="HASS Connect custom-command editor"></a></td>
   </tr>
   <tr>
@@ -85,7 +88,9 @@ All sensors are off by default. Enabled sensors report every 15 seconds.
 | Download / upload speed | Total traffic on that adapter, in Mbit/s |
 
 Sensors can be disabled in either the app or HA. **Enable sensors** pauses reporting
-without changing your selections. HA retains the last values while the PC is offline;
+without changing your selections. You can change selections while paused or offline;
+they are applied when reporting resumes. The Sensors page shows when readings were last
+updated. HA retains the last values while the PC is offline;
 enable **Last seen** and add a [freshness condition](docs/sensors.md#guard-automations-against-stale-readings)
 before automating on CPU usage, idle time or other readings.
 

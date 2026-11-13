@@ -21,6 +21,7 @@ public sealed record Settings
     public IReadOnlyList<QuickActionDefinition> QuickActions { get; init; } = [];
     public QuickAccessShortcut? QuickAccessShortcut { get; init; }
     public HashSet<string> EnabledSensors { get; init; } = [];
+    public Dictionary<string, bool> PendingSensorChanges { get; init; } = new(StringComparer.Ordinal);
 }
 
 public sealed record QuickAccessShortcut(int VirtualKey, bool Control, bool Alt, bool Shift);

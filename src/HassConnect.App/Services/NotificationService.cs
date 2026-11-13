@@ -51,7 +51,13 @@ internal sealed class NotificationService : IAsyncDisposable
         if (!receiverEnabled)
         {
             SetStatus("Off", false);
-            await SetRemoteCapabilityAsync(settings, credentials, false, ct);
+            try { await SetRemoteCapabilityAsync(settings, credentials, false, ct); }
+            catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or RegistrationRemovedException)
+            {
+                // Local disable takes effect even when Home Assistant is offline.
+                if (ct.IsCancellationRequested) throw;
+                AppLog.Write("Disable remote messages", ex);
+            }
             return;
         }
         if (settings.NotificationsEnabled && !Supported)
@@ -74,7 +80,6 @@ internal sealed class NotificationService : IAsyncDisposable
             return;
         }
         ct.ThrowIfCancellationRequested();
-        await SetRemoteCapabilityAsync(settings, credentials, true, ct);
         _receiverStop = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
         _receiver = RunAsync(settings, credentials, _receiverStop.Token);
     }
@@ -105,40 +110,20 @@ internal sealed class NotificationService : IAsyncDisposable
         _initialized = true;
     }
 
-    private async Task RunAsync(Settings settings, Credentials credentials, CancellationToken ct)
-    {
-        var failures = 0;
-        while (!ct.IsCancellationRequested)
-        {
-            try
+    private Task RunAsync(Settings settings, Credentials credentials, CancellationToken ct) =>
+        NotificationReceiver.RunAsync(
+            token => SetRemoteCapabilityAsync(settings, credentials, true, token),
+            (connected, token) => NotificationChannel.ReceiveAsync(ServerAddress.Parse(settings.ServerUrl), credentials,
+                DeliverAsync, connected, ex => AppLog.Write("Remote message", ex.GetType().Name), token),
+            state => SetStatus(state switch
             {
-                SetStatus("Connecting…", false);
-                using var client = new HaClient(ServerAddress.Parse(settings.ServerUrl), credentials.AccessToken);
-                await NotificationChannel.ReceiveAsync(ServerAddress.Parse(settings.ServerUrl), credentials,
-                    DeliverAsync, () => { failures = 0; SetStatus("Connected", true); },
-                    ex => AppLog.Write("Remote message", ex.GetType().Name), ct);
-            }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
-            catch (UnauthorizedAccessException)
-            {
-                SetStatus("Update the access token in Settings", false);
-                return;
-            }
-            catch (RegistrationRemovedException)
-            {
-                SetStatus("Device removed from Home Assistant", false);
-                return;
-            }
-            catch (Exception ex)
-            {
-                AppLog.Write("Notification connection", ex.GetType().Name);
-                SetStatus("Reconnecting…", false);
-            }
-            failures = Math.Min(failures + 1, 4);
-            try { await Task.Delay(TimeSpan.FromSeconds(Math.Min(60, 5 * (1 << failures))), ct); }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
-        }
-    }
+                NotificationConnectionState.Connected => "Connected",
+                NotificationConnectionState.SignInRequired => "Update the access token in Settings",
+                NotificationConnectionState.DeviceRemoved => "Device removed from Home Assistant",
+                NotificationConnectionState.Reconnecting => "Reconnecting…",
+                _ => "Connecting…"
+            }, state == NotificationConnectionState.Connected),
+            ex => AppLog.Write("Notification connection", ex.GetType().Name), ct);
 
     private async Task DeliverAsync(NotificationMessage message, CancellationToken ct)
     {
@@ -157,10 +142,8 @@ internal sealed class NotificationService : IAsyncDisposable
             }
             else if (settings.PcControlEnabled && settings.EnabledPcCommands.Contains(command.Id))
             {
-                // Give Home Assistant time to receive its delivery confirmation before
-                // the network connection is suspended with the PC.
-                if (command.RequiresDeferredExecution) QueueDeferredCommand(command);
-                else ExecutePcCommand(command);
+                // The channel sends its receipt confirmation before dispatching commands.
+                ExecutePcCommand(command);
             }
             else AppLog.Write("PC control", "Ignored while disabled");
             return;
@@ -188,7 +171,7 @@ internal sealed class NotificationService : IAsyncDisposable
                 AppLog.Write("Notification image", detail);
             }
             catch (OperationCanceledException) { AppLog.Write("Notification image", "Download timed out"); }
-            catch (Exception ex) { AppLog.Write("Notification image", ex.GetType().Name); }
+            catch (Exception ex) { AppLog.Write("Notification image", ex); }
         }
         ct.ThrowIfCancellationRequested();
         var actions = new List<(string Title, string Argument)>();
@@ -240,9 +223,6 @@ internal sealed class NotificationService : IAsyncDisposable
     private void QueueAction(string argument)
         => QueueBackground(() => SendActionAsync(argument));
 
-    private void QueueDeferredCommand(PcCommand command)
-        => QueueBackground(() => ExecuteDeferredCommandAsync(command));
-
     private void QueueBackground(Func<Task> operation)
     {
         lock (_taskGate)
@@ -251,16 +231,6 @@ internal sealed class NotificationService : IAsyncDisposable
             _backgroundTasks.RemoveAll(task => task.IsCompleted);
             _backgroundTasks.Add(operation());
         }
-    }
-
-    private async Task ExecuteDeferredCommandAsync(PcCommand command)
-    {
-        try
-        {
-            await Task.Delay(TimeSpan.FromSeconds(1), _lifetime.Token);
-            ExecutePcCommand(command);
-        }
-        catch (OperationCanceledException) when (_disposed) { }
     }
 
     private void ExecutePcCommand(PcCommand command)
@@ -312,7 +282,7 @@ internal sealed class NotificationService : IAsyncDisposable
         catch (OperationCanceledException) when (_disposed) { }
         catch (Exception ex)
         {
-            AppLog.Write("Notification action", ex.GetType().Name);
+            AppLog.Write("Notification action", ex);
             SetStatus("Notification action could not be completed", Connected);
             try
             {
@@ -360,7 +330,7 @@ internal sealed class NotificationService : IAsyncDisposable
         await Task.WhenAll(backgroundTasks);
         await StopReceiverAsync();
         try { await _windows.ClearAsync(); }
-        catch (Exception ex) { AppLog.Write("Notification cleanup", ex.GetType().Name); }
+        catch (Exception ex) { AppLog.Write("Notification cleanup", ex); }
         _actions.Clear();
         _images.Dispose();
         _lifetime.Dispose();

@@ -1,9 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup><TargetFramework>net10.0</TargetFramework><IsPackable>false</IsPackable></PropertyGroup>
+  <PropertyGroup><TargetFramework>net10.0-windows</TargetFramework><IsPackable>false</IsPackable></PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="4.0.0" PrivateAssets="all" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.12" />
+    <Compile Include="../../src/HassConnect.App/Services/SettingsStore.cs" Link="App/SettingsStore.cs" />
+    <Compile Include="../../src/HassConnect.App/Services/UserDataDirectory.cs" Link="App/UserDataDirectory.cs" />
     <ProjectReference Include="../../src/HassConnect.HomeAssistant/HassConnect.HomeAssistant.csproj" />
     <ProjectReference Include="../../src/HassConnect.Updates/HassConnect.Updates.csproj" />
     <Using Include="Xunit" />

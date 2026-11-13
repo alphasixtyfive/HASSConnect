@@ -19,7 +19,9 @@ public sealed record SensorSyncPlan(
         foreach (var sensor in supported)
         {
             var registered = remoteEnabled.TryGetValue(sensor.Id, out var selected);
-            if (!(registered ? selected : settings.EnabledSensors.Contains(sensor.Id))) continue;
+            var wanted = settings.PendingSensorChanges.TryGetValue(sensor.Id, out var pending)
+                ? pending : registered ? selected : settings.EnabledSensors.Contains(sensor.Id);
+            if (!wanted) continue;
             enabled.Add(sensor.Id);
             if (!settings.ShareSensors) continue;
             readings.Add(sensor);

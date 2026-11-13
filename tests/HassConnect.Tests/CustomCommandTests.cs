@@ -6,6 +6,17 @@ namespace HassConnect.Tests;
 
 public sealed class CustomCommandTests
 {
+    [Fact]
+    public void SuggestedIdsAreValidUniqueAndStableForLongOrNonLatinNames()
+    {
+        Assert.Equal("command_custom_open_music", CustomCommandPolicy.SuggestId("Open Music!", []));
+        Assert.Equal("command_custom_open_music_2", CustomCommandPolicy.SuggestId("Open Music", ["command_custom_open_music"]));
+        Assert.Equal("command_custom_action", CustomCommandPolicy.SuggestId("Музыка", []));
+        var first = CustomCommandPolicy.SuggestId(new string('a', 60), []);
+        var second = CustomCommandPolicy.SuggestId(new string('a', 60), [first]);
+        Assert.Equal(47, second.Length);
+        Assert.EndsWith("_2", second);
+    }
     private static readonly string Executable = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.System), "notepad.exe");
 

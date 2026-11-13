@@ -6,8 +6,14 @@ public sealed record HomeAssistantDashboard(string Title, string Path);
 
 public static class DashboardCatalog
 {
-    public static async Task<IReadOnlyList<HomeAssistantDashboard>> GetAsync(Uri server, string token, CancellationToken ct)
+    public static Task<IReadOnlyList<HomeAssistantDashboard>> GetAsync(Uri server, string token, CancellationToken ct) =>
+        GetAsync(server, token, ct, TimeSpan.FromSeconds(20));
+
+    internal static async Task<IReadOnlyList<HomeAssistantDashboard>> GetAsync(Uri server, string token, CancellationToken ct, TimeSpan timeout)
     {
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        deadline.CancelAfter(timeout);
+        ct = deadline.Token;
         await using var socket = await HaWebSocket.ConnectAsync(server, token, ct);
         var dashboards = new Dictionary<string, HomeAssistantDashboard>(StringComparer.OrdinalIgnoreCase);
 

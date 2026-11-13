@@ -24,11 +24,47 @@ The app uses shared .NET and Windows App SDK runtimes. Setup installs these depe
 - `HassConnect.HomeAssistant`: HTTP and WebSocket protocols, independent of the UI and sensor collection.
 - `HassConnect.Updates`: stable-release discovery plus verified installer downloads from GitHub, independent of Windows and Home Assistant.
 - `HassConnect.App`: native WinUI settings, tray lifecycle, Windows sensor readers, encrypted storage and the reporting session.
-- `HassConnect.Tests`: protocol, validation, reconciliation and CPU calculation tests with an in-memory HTTP handler.
+- `HassConnect.Tests`: Windows tests for protocol, validation, reconciliation, recovery and sampling. The settings store is source-linked to exercise the same persistence code without loading WinUI.
 
 The initial window is 800 × 840 DIPs, capped to the available desktop work area. The window keeps a minimum client area of 720 × 440 DIPs and caps the settings column at 960 DIPs. Shorter windows scroll vertically; maximizing retains the same title and control alignment.
 
 The reporting session serializes connection and sensor changes. It reuses a stable device identity, reads Home Assistant's enabled states before publishing, backs off on temporary failures, and stops retrying a removed registration until Connect is explicitly pressed. Disabled sensors are not polled.
+
+Local sensor changes are saved before network work, including while paused or offline.
+Pending choices survive restarts and take precedence until registered successfully;
+after reconciliation, later HA-side changes are respected again. Dashboard discovery
+runs outside the reporting lock. Dashboard requests, subscription setup and streamed
+entity responses have operation deadlines.
+
+The notification receiver retries capability registration as well as subscription.
+It confirms receipt before dispatching to one ordered worker with a 32-message pending
+queue. On overload, additional messages are confirmed as received but rejected and
+logged; they are not executed or replayed. Confirmation failure restarts the channel,
+while rejected credentials and a removed registration wait for explicit reconnection.
+
+Settings retain a validated last-good backup. Recovering that backup disables PC control
+and clears command opt-ins so older permissions cannot silently return. Unreadable
+credentials require sign-in without discarding preferences. Pairing uses an encrypted,
+flushed journal to complete interrupted settings/credential writes on the next launch.
+A missing valid backup cannot reconstruct lost settings; newer schemas are never overwritten.
+
+## Isolated UI checks
+
+After publishing, run the native Windows checks without touching the running app:
+
+```powershell
+powershell.exe -NoProfile -File tests/UiSmoke.ps1 -AppPath artifacts/app/HassConnect.App.exe
+```
+
+The script creates a fresh test profile under `artifacts/ui-smoke`, injects a denied
+settings write, verifies retry and offline preferences, and captures the command editor
+at normal and short window sizes. It never runs a PC command. Native captures are PNGs;
+inspect them before using any as product screenshots.
+
+`HASSCONNECT_TEST_PROFILE` selects a separate data directory and single-instance key.
+In this mode native notification registration and automatic update checks are disabled.
+Use only disposable profiles without credentials. The script restores its process
+environment and stops only the test process that it started.
 
 Network sensors follow the IPv4 route to the configured Home Assistant server. Speeds measure all traffic on that adapter, averaged over the reporting interval, in Mbit/s. The first rate sample is unavailable; changing adapters or resuming reporting starts a new baseline. No public IP lookup is performed. IPv6-only Home Assistant addresses currently leave network readings unavailable.
 

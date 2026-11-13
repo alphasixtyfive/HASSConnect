@@ -10,12 +10,12 @@
                     <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="120" /></Grid.ColumnDefinitions>
                     <StackPanel Spacing="4" VerticalAlignment="Center">
                         <TextBlock x:Name="InstalledVersion" FontWeight="SemiBold" FontSize="14" />
-                        <TextBlock x:Name="UpdateStatus" Text="Checking for updates…" Style="{StaticResource CaptionTextBlockStyle}"
+                        <TextBlock x:Name="UpdateStatus" Text="Check for a newer version." Style="{StaticResource CaptionTextBlockStyle}"
                                    TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                     </StackPanel>
-                    <Button x:Name="UpdateButton" Grid.Column="1" Width="120" Content="Check for updates"
-                            VerticalAlignment="Center" IsEnabled="False" Click="Update_Click" />
+                    <Button x:Name="UpdateButton" Grid.Column="1" Width="120" Content="Check now"
+                            VerticalAlignment="Center" Click="Update_Click" />
                 </Grid>
                 <ProgressBar x:Name="DownloadProgress" Visibility="Collapsed" IsIndeterminate="True"
                              AutomationProperties.Name="Update download progress" />

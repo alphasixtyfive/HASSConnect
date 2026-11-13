@@ -12,7 +12,7 @@ permissions:
 jobs:
   windows:
     runs-on: windows-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v6
@@ -36,21 +36,11 @@ jobs:
       - name: Build installer
         shell: pwsh
         run: ./packaging/Build-Installer.ps1
-      - name: Check installation and removal
+      - name: Check installation, upgrade and removal
         shell: pwsh
-        run: |
-          $setup = (Get-ChildItem artifacts/release/*-Setup-x64.exe).FullName
-          $app = "$env:LOCALAPPDATA/Programs/HASSConnect/HassConnect.App.exe"
-          $install = Start-Process $setup -ArgumentList '/install /quiet /norestart' -Wait -PassThru
-          if ($install.ExitCode -ne 0 -or -not (Test-Path $app)) { throw 'Installation failed.' }
-          $runningApp = Start-Process $app -PassThru
-          Start-Sleep -Seconds 5
-          $runningApp.Refresh()
-          if ($runningApp.HasExited) { throw 'The installed app could not start.' }
-          $remove = Start-Process $setup -ArgumentList '/uninstall /quiet /norestart' -Wait -PassThru
-          $runningApp.Refresh()
-          if (-not $runningApp.HasExited) { throw 'Uninstall left the app running.' }
-          if ($remove.ExitCode -ne 0 -or (Test-Path $app)) { throw 'Uninstall failed.' }
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./tests/InstallerSmoke.ps1
       - uses: actions/upload-artifact@v7
         with:
           name: HASSConnect-Windows-x64

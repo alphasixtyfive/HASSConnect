@@ -7,7 +7,7 @@ internal sealed partial class WindowsNotifications : IDisposable
 {
     private bool _registered;
 
-    public static bool Supported => AppNotificationManager.IsSupported();
+    public static bool Supported => !UserDataDirectory.IsIsolated && AppNotificationManager.IsSupported();
     public event Action<string>? Invoked;
 
     public void Register()
