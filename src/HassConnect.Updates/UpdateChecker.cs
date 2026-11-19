@@ -6,7 +6,7 @@ using HassConnect.Core;
 namespace HassConnect.Updates;
 
 public enum UpdateState { NotConfigured, Current, Available, Unavailable }
-public sealed record UpdatePackage(string Version, Uri InstallerDownload, Uri ChecksumDownload, long? Size);
+public sealed record UpdatePackage(string Version, Uri InstallerDownload, Uri ChecksumDownload, long Size);
 public sealed record UpdateResult(
     UpdateState State,
     string Message,
@@ -96,7 +96,8 @@ public sealed partial class UpdateChecker(HttpClient client)
             if (string.Equals(name, installerName, StringComparison.Ordinal))
             {
                 installer = url;
-                if (asset.TryGetProperty("size", out var sizeElement) && sizeElement.TryGetInt64(out var value))
+                if (asset.TryGetProperty("size", out var sizeElement) && sizeElement.ValueKind == JsonValueKind.Number &&
+                    sizeElement.TryGetInt64(out var value))
                     size = value;
             }
             else if (string.Equals(name, checksumName, StringComparison.Ordinal))
@@ -105,19 +106,22 @@ public sealed partial class UpdateChecker(HttpClient client)
             }
         }
 
-        return installer is not null && checksum is not null && size is > 0
-            ? new(version, installer, checksum, size)
+        return installer is not null && checksum is not null && size is > 0 and <= UpdateInstaller.MaximumInstallerBytes
+            ? new(version, installer, checksum, size.Value)
             : null;
     }
 
     internal static bool IsTrustedAsset(Uri uri, string repository, string tag, string name)
     {
         var expectedPath = $"/{repository}/releases/download/{Uri.EscapeDataString(tag)}/{Uri.EscapeDataString(name)}";
-        return uri.Scheme == Uri.UriSchemeHttps &&
+        return IsDefaultHttps(uri) &&
             uri.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase) &&
             uri.AbsolutePath.Equals(expectedPath, StringComparison.OrdinalIgnoreCase) &&
             string.IsNullOrEmpty(uri.Query) && string.IsNullOrEmpty(uri.Fragment);
     }
+
+    internal static bool IsDefaultHttps(Uri uri) =>
+        uri.IsAbsoluteUri && uri.Scheme == Uri.UriSchemeHttps && uri.IsDefaultPort && uri.UserInfo.Length == 0;
 
     [GeneratedRegex(@"\A[A-Za-z0-9_-]+/[A-Za-z0-9_.-]+\z")]
     private static partial Regex RepositoryNamePattern();

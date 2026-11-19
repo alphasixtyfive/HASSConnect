@@ -244,13 +244,13 @@ public sealed partial class MainWindow : Window
         if (_session is null || _connecting) return;
         if (!await DialogLayout.ShowConfirmationAsync(Root.XamlRoot, "Reset connection?",
                 "Your sensor and command choices will stay. Enter the server address and access token again to reconnect. The device in Home Assistant will remain.",
-                "Reset", defaultToPrimary: false)) return;
+                "Reset")) return;
         _connecting = true;
         try
         {
             _dashboardCancellation?.Cancel();
             await _session.ResetConnectionAsync();
-            _quickAccessWindow?.Hide();
+            _quickAccessWindow?.Hide(commitPendingLevel: false);
             ServerBox.IsReadOnly = DeviceBox.IsReadOnly = false;
             ServerBox.Text = "";
             TokenBox.Password = "";
@@ -485,10 +485,17 @@ public sealed partial class MainWindow : Window
 
     private async void Theme_Changed(object sender, SelectionChangedEventArgs e)
     {
-        if (_loading || _session is null || ThemeBox.SelectedItem is not string theme) return;
-        ApplyTheme(theme);
-        try { await _session.SetThemeAsync(theme); }
-        catch (Exception ex) { ShowError(UserMessage(ex)); }
+        if (_loading || _session is null || ThemeBox.SelectedItem is not string theme || theme == _session.Settings.Theme) return;
+        try
+        {
+            await _session.SetThemeAsync(theme);
+            ApplyTheme(_session.Settings.Theme);
+        }
+        catch (Exception ex)
+        {
+            ThemeBox.SelectedItem = _session.Settings.Theme;
+            ShowError(UserMessage(ex));
+        }
     }
 
     private void ApplyTheme(string theme) => Root.RequestedTheme = theme switch
@@ -585,7 +592,7 @@ public sealed partial class MainWindow : Window
         _dashboardCancellation?.Cancel();
         NotificationsPage.ClearTransientFeedback();
         _tray.Dispose();
-        _quickAccessWindow?.Hide();
+        _quickAccessWindow?.Hide(commitPendingLevel: false);
         try
         {
             if (_session is not null) await _session.DisposeAsync();

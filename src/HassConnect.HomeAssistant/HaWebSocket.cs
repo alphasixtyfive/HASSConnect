@@ -27,8 +27,11 @@ internal sealed class HaWebSocket : IAsyncDisposable
                 throw new InvalidDataException("Unexpected Home Assistant handshake.");
 
             await connection.SendAsync(new { type = "auth", access_token = token }, handshake.Token);
-            if (MessageType(await connection.ReadAsync(handshake.Token)) != "auth_ok")
+            var result = MessageType(await connection.ReadAsync(handshake.Token));
+            if (result == "auth_invalid")
                 throw new HttpRequestException("Home Assistant rejected the access token.", null, HttpStatusCode.Unauthorized);
+            if (result != "auth_ok")
+                throw new InvalidDataException("Unexpected Home Assistant authentication response.");
             return connection;
         }
         catch
@@ -66,7 +69,7 @@ internal sealed class HaWebSocket : IAsyncDisposable
         {
             var message = await ReadAsync(ct);
             if (MessageType(message) != "result" || !message.TryGetProperty("id", out var messageId) ||
-                !messageId.TryGetInt32(out var resultId) || resultId != id)
+                messageId.ValueKind != JsonValueKind.Number || !messageId.TryGetInt32(out var resultId) || resultId != id)
                 continue;
             EnsureSuccess(message, registrationRequest);
             return message.TryGetProperty("result", out var result) ? result : default;

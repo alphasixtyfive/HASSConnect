@@ -46,12 +46,13 @@ public static class NotificationChannel
             while (!ct.IsCancellationRequested)
             {
                 var packet = await read(stop.Token);
-                if (Type(packet) == "result")
+                var type = HaWebSocket.MessageType(packet);
+                if (type == "result")
                 {
                     HaWebSocket.EnsureSuccess(packet);
                     continue;
                 }
-                if (Type(packet) != "event" || !packet.TryGetProperty("id", out var id) ||
+                if (type != "event" || !packet.TryGetProperty("id", out var id) ||
                     id.ValueKind != JsonValueKind.Number || !id.TryGetInt32(out var channelId) || channelId != 1 ||
                     !packet.TryGetProperty("event", out var payload) || payload.ValueKind != JsonValueKind.Object)
                     continue;
@@ -104,5 +105,4 @@ public static class NotificationChannel
         catch (Exception ex) { rejected(ex); }
     }
 
-    private static string? Type(JsonElement packet) => HaWebSocket.MessageType(packet);
 }

@@ -22,6 +22,8 @@ public sealed class DesktopSensorTests
     [Theory]
     [InlineData("microphone_in_use", "binary_sensor", null, "Activity")]
     [InlineData("webcam_in_use", "binary_sensor", null, "Activity")]
+    [InlineData("speakers_in_use", "binary_sensor", null, "Activity")]
+    [InlineData("windows_update_restart_required", "binary_sensor", "problem", "System")]
     [InlineData("battery_charging", "binary_sensor", "battery_charging", "Power")]
     [InlineData("disk_usage", "sensor", null, "Storage")]
     [InlineData("disk_free_space", "sensor", "data_size", "Storage")]

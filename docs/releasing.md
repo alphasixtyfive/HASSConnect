@@ -28,5 +28,5 @@ without signing in, and check **Settings > Updates** against the published relea
 For later versions, also check that the preceding version offers the new release.
 
 The app checks automatically and can download, verify and start the published Setup
-bundle after the user confirms. If either the Setup bundle or checksum manifest is
+bundle, which asks the user to confirm the update. If either the Setup bundle or checksum manifest is
 missing, it falls back to the release page.

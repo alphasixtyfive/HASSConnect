@@ -9,7 +9,11 @@ namespace HassConnect.App.Views;
 
 public sealed partial class UpdateSettingsView : UserControl
 {
-    private static readonly HttpClient Client = CreateClient();
+    private static readonly HttpClient Client = new(new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false })
+    {
+        Timeout = Timeout.InfiniteTimeSpan,
+        MaxResponseContentBufferSize = 1024 * 1024
+    };
     private readonly CancellationTokenSource _lifetime = new();
     private UpdateResult? _update;
     private bool _busy;
@@ -30,13 +34,21 @@ public sealed partial class UpdateSettingsView : UserControl
         if (_busy) return;
         if (_update?.Package is { } package)
         {
-            await ConfirmAndInstallAsync(package);
+            await PrepareUpdateAsync(package);
             return;
         }
         if (_update?.ReleasePage is { } release)
         {
-            if (!await Windows.System.Launcher.LaunchUriAsync(release))
+            try
+            {
+                if (!await Windows.System.Launcher.LaunchUriAsync(release))
+                    SetStatus("Couldn’t open the release page.");
+            }
+            catch (Exception ex)
+            {
+                AppLog.Write("Open update release", ex);
                 SetStatus("Couldn’t open the release page.");
+            }
             return;
         }
         await CheckAsync();
@@ -70,16 +82,10 @@ public sealed partial class UpdateSettingsView : UserControl
         finally { SetBusy(false); }
     }
 
-    private async Task ConfirmAndInstallAsync(UpdatePackage package)
+    private async Task PrepareUpdateAsync(UpdatePackage package)
     {
-        if (!await DialogLayout.ShowConfirmationAsync(
-                XamlRoot,
-                "Install HASS Connect update?",
-                $"Version {package.Version} will be downloaded, verified, and opened in Setup. HASS Connect will close while Windows installs the update.",
-                "Install",
-                defaultToPrimary: true)) return;
-
         SetBusy(true);
+        DownloadProgress.Value = 0;
         DownloadProgress.Visibility = Visibility.Visible;
         DownloadProgress.IsIndeterminate = true;
         SetStatus($"Downloading version {package.Version}…");
@@ -87,16 +93,10 @@ public sealed partial class UpdateSettingsView : UserControl
         {
             var progress = new Progress<UpdateDownloadProgress>(value =>
             {
-                if (value.TotalBytes is > 0)
-                {
-                    DownloadProgress.IsIndeterminate = false;
-                    DownloadProgress.Value = value.BytesReceived * 100d / value.TotalBytes.Value;
-                    SetStatus($"Downloading version {package.Version} · {DownloadProgress.Value:0}%");
-                }
-                else
-                {
-                    SetStatus($"Downloading version {package.Version} · {value.BytesReceived / 1024d / 1024d:0.0} MB");
-                }
+                if (DownloadProgress.Visibility != Visibility.Visible) return;
+                DownloadProgress.IsIndeterminate = false;
+                DownloadProgress.Value = value.BytesReceived * 100d / value.TotalBytes;
+                SetStatus($"Downloading version {package.Version} · {DownloadProgress.Value:0}%");
             });
             var downloaded = await new UpdateInstaller(Client).DownloadAsync(
                 package,
@@ -104,14 +104,18 @@ public sealed partial class UpdateSettingsView : UserControl
                 Path.Combine(UserDataDirectory.Path, "Updates"),
                 progress,
                 _lifetime.Token);
-            SetStatus("Download verified. Opening Setup…");
+            DownloadProgress.Visibility = Visibility.Collapsed;
+            _lifetime.Token.ThrowIfCancellationRequested();
+            SetStatus("Download verified. Choose Update in Setup to continue.");
             using var process = Process.Start(new ProcessStartInfo(downloaded.InstallerPath)
             {
                 UseShellExecute = true,
-                Arguments = "/install"
+                Arguments = "/install /norestart HassConnectInAppUpdate=1"
             });
             if (process is null) throw new InvalidOperationException("Windows could not start Setup.");
-            SetStatus($"HASS Connect {package.Version} Setup is ready. Follow the installer to finish updating.");
+            await process.WaitForExitAsync(_lifetime.Token);
+            // Setup shuts this app down when it starts replacing the installed files.
+            SetStatus("Setup closed. Select Get update to try again.");
         }
         catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
         catch (OperationCanceledException)
@@ -121,7 +125,7 @@ public sealed partial class UpdateSettingsView : UserControl
         catch (Exception ex) when (ex is HttpRequestException or IOException or UnauthorizedAccessException or
             InvalidDataException or InvalidOperationException or System.ComponentModel.Win32Exception)
         {
-            AppLog.Write("Update install", ex.GetType().Name);
+            AppLog.Write("Update install", ex);
             SetStatus("Couldn’t download or start the update. Try again.");
         }
         finally
@@ -141,17 +145,7 @@ public sealed partial class UpdateSettingsView : UserControl
     {
         _busy = busy;
         UpdateButton.IsEnabled = !busy;
-        UpdateButton.Content = busy ? "Please wait…" : _update?.Package is not null ? "Install update" :
+        UpdateButton.Content = busy ? "Please wait…" : _update?.Package is not null ? "Get update" :
             _update?.ReleasePage is not null ? "View release" : "Check now";
-    }
-
-    private static HttpClient CreateClient()
-    {
-        var client = new HttpClient
-        {
-            Timeout = Timeout.InfiniteTimeSpan,
-            MaxResponseContentBufferSize = 1024 * 1024
-        };
-        return client;
     }
 }

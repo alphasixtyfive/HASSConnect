@@ -15,6 +15,15 @@ does not detect individual monitor hardware switches.
 Microphone and webcam activity come from Windows capability-use records for the
 current user. The app does not inspect or transmit the application using them.
 
+**Speaker activity** reports whether sound is playing through the default Windows
+output, including headphones. It uses the Windows output-level meter and reports
+only a binary state. Muted output counts as quiet. Brief sounds can fall between
+reports.
+
+**Windows Update restart** reports whether updates are waiting for a restart to
+finish installing or uninstalling. Enable it to use that state in Home Assistant
+notifications and automations. The sensor only reads Windows Update status.
+
 System disk readings describe the volume containing Windows. Free space is reported
 in decimal gigabytes and usage as a percentage. Battery sensors are unavailable on
 PCs where Windows reports no system battery.

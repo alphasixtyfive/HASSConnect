@@ -22,7 +22,8 @@ try {
     foreach ($resource in 'HassConnect.App.exe', 'HassConnect.App.pri', 'resources.pri', 'App.xbf', 'MainWindow.xbf', 'QuickAccessWindow.xbf',
         'Views/SettingsRow.xbf', 'Views/SensorSettingsView.xbf', 'Views/NotificationSettingsView.xbf', 'Views/ControlSettingsView.xbf',
         'Views/QuickAccessSettingsView.xbf', 'Views/QuickActionIconPicker.xbf', 'Views/CustomCommandDialog.xbf',
-        'Views/AboutView.xbf', 'Assets/app.ico', 'Assets/hass-connect.png') {
+        'Views/QuickAccessLevelTile.xbf',
+        'Views/UpdateSettingsView.xbf', 'Views/AboutView.xbf', 'Assets/app.ico', 'Assets/hass-connect.png') {
         if (-not (Test-Path -LiteralPath (Join-Path $OutputDirectory $resource))) { throw "Published app is missing $resource." }
     }
     Write-Host "Ready: $OutputDirectory/HassConnect.App.exe"

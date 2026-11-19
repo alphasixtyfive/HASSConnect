@@ -40,7 +40,7 @@ public sealed partial class MainWindow
 
         _quickAccessWindow = new QuickAccessWindow();
         _quickAccessWindow.Hidden += () => _quickStateCancellation?.Cancel();
-        _quickAccessWindow.ActionRequested += action => _ = InvokeQuickActionAsync(action);
+        _quickAccessWindow.ActionRequested += (action, level) => _ = InvokeQuickActionAsync(action, level);
         _quickAccessWindow.EditRequested += () =>
         {
             ShowWindow();
@@ -88,7 +88,7 @@ public sealed partial class MainWindow
         finally { _quickShortcutSaving = false; }
     }
 
-    private async Task InvokeQuickActionAsync(QuickActionDefinition action)
+    private async Task InvokeQuickActionAsync(QuickActionDefinition action, int? level)
     {
         if (_session is null || _quickAccessWindow is null) return;
         var generation = ++_quickInteractionGeneration;
@@ -96,7 +96,7 @@ public sealed partial class MainWindow
         _quickStateRequest++; // Ignore any state request started before this command.
         try
         {
-            await _session.InvokeQuickActionAsync(action);
+            await _session.InvokeQuickActionAsync(action, level);
             if (!IsCurrentQuickInteraction(generation)) return;
             _quickAccessWindow.CompleteAction();
             await Task.Delay(700);
@@ -157,7 +157,7 @@ public sealed partial class MainWindow
         var action = _session.Settings.QuickActions[index];
         var confirmed = await Views.DialogLayout.ShowConfirmationAsync(
             Root.XamlRoot, "Remove quick action?", $"Remove “{action.Label}” from Quick access?",
-            "Remove", defaultToPrimary: false, destructive: true);
+            "Remove", destructive: true);
         if (!confirmed) return;
         try { await _session.RemoveQuickActionAsync(index); }
         catch (Exception ex) { ShowError(UserMessage(ex)); }
@@ -195,7 +195,7 @@ public sealed partial class MainWindow
             QuickEntityList.ItemsSource = null;
             QuickActionIconPicker.SelectIcon(existing?.Icon);
             QuickActionIconPicker.SetEntity(existing?.EntityId, null);
-            SetQuickOperations(existing?.EntityId, existing?.Operation);
+            SetQuickOperations(null, null);
 
             var dialog = QuickActionDialog.ShowAsync();
             try
@@ -321,17 +321,14 @@ public sealed partial class MainWindow
         _suggestedQuickLabel = entity.Name;
         QuickActionIconPicker.SetEntity(entity.EntityId, entity.Icon);
         var original = _editingQuickIndex is { } index ? _session?.Settings.QuickActions[index] : null;
-        SetQuickOperations(entity.EntityId, original?.EntityId == entity.EntityId ? original.Operation : null);
+        SetQuickOperations(entity, original?.EntityId == entity.EntityId ? original.Operation : null);
         SaveQuickActionButton.IsEnabled = QuickActionOperationBox.SelectedItem is not null;
     }
 
-    private void SetQuickOperations(string? entityId, string? selected)
+    private void SetQuickOperations(QuickActionEntity? entity, string? selected)
     {
         QuickActionOperationBox.Items.Clear();
-        var features = _quickEntities.FirstOrDefault(entity => entity.EntityId == entityId)?.Entity.SupportedFeatures;
-        var operations = entityId?.StartsWith("cover.", StringComparison.Ordinal) == true && features is null
-            ? [] : QuickActionPolicy.AllowedOperations(entityId, features);
-        foreach (var operation in operations)
+        foreach (var operation in entity?.Operations ?? [])
             QuickActionOperationBox.Items.Add(new ComboBoxItem
             {
                 Content = QuickActionLabels.Operation(operation),
@@ -342,7 +339,7 @@ public sealed partial class MainWindow
             ? QuickActionOperationBox.Items.FirstOrDefault()
             : QuickActionOperationBox.Items.Cast<ComboBoxItem>()
                 .FirstOrDefault(item => (string)item.Tag == selected);
-        QuickActionOperationBox.PlaceholderText = entityId is not null && QuickActionOperationBox.Items.Count == 0
+        QuickActionOperationBox.PlaceholderText = entity is not null && QuickActionOperationBox.Items.Count == 0
             ? "No supported actions" : selected is not null && QuickActionOperationBox.SelectedItem is null
                 ? "Choose a supported action" : "Select an entity first";
     }

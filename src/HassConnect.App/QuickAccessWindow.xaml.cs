@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using HassConnect.Core;
 using HassConnect.App.Views;
 using HassConnect.App.Services;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
@@ -23,11 +24,12 @@ internal sealed partial class QuickAccessWindow : Window
     private readonly nint _windowHandle;
     private readonly SubclassProc _frameCallback;
     private readonly List<ActionTile> _tiles = [];
-    private bool _actionPending;
+    private readonly DispatcherQueueTimer _levelCommitTimer;
+    private ActionTile? _pendingAction;
     private bool _isConnected;
     private int _showVersion;
 
-    internal event Action<QuickActionDefinition>? ActionRequested;
+    internal event Action<QuickActionDefinition, int?>? ActionRequested;
     internal event Action? EditRequested;
     internal event Action? OpenHomeAssistantRequested;
     internal event Action? Hidden;
@@ -37,6 +39,10 @@ internal sealed partial class QuickAccessWindow : Window
     internal QuickAccessWindow()
     {
         InitializeComponent();
+        _levelCommitTimer = DispatcherQueue.CreateTimer();
+        _levelCommitTimer.Interval = TimeSpan.FromMilliseconds(200);
+        _levelCommitTimer.IsRepeating = false;
+        _levelCommitTimer.Tick += (_, _) => CommitPendingLevel();
         _windowHandle = WinRT.Interop.WindowNative.GetWindowHandle(this);
         var presenter = OverlappedPresenter.Create();
         presenter.SetBorderAndTitleBar(false, false);
@@ -71,8 +77,8 @@ internal sealed partial class QuickAccessWindow : Window
     {
         var showVersion = ++_showVersion;
         PopulateActions(actions, isConnected);
-        if (fromShortcut) PositionForShortcut(actions.Count, !isConnected);
-        else PositionNearCursor(actions.Count, !isConnected);
+        if (fromShortcut) PositionForShortcut(!isConnected);
+        else PositionNearCursor(!isConnected);
         IsVisible = true;
         AppWindow.Show();
         WindowActivation.RestoreAndActivate(_windowHandle);
@@ -81,18 +87,19 @@ internal sealed partial class QuickAccessWindow : Window
         DispatcherQueue.TryEnqueue(() =>
         {
             if (!IsVisible || showVersion != _showVersion) return;
-            Control focus = _tiles.FirstOrDefault(tile => tile.Button.IsEnabled)?.Button
+            Control focus = _tiles.FirstOrDefault(tile => tile.Input.IsEnabled)?.Input
                 ?? (EmptyState.Visibility == Visibility.Visible ? (Control)EmptyActionButton : SettingsButton);
             // Pointer focus keeps the tray popup ready without a keyboard focus ring.
             focus.Focus(fromShortcut ? FocusState.Keyboard : FocusState.Pointer);
         });
     }
 
-    internal void Hide()
+    internal void Hide(bool commitPendingLevel = true)
     {
         if (!IsVisible) return;
+        _levelCommitTimer.Stop();
+        if (commitPendingLevel) CommitPendingLevel();
         _showVersion++;
-        _actionPending = false;
         IsVisible = false;
         AppWindow.Hide();
         Hidden?.Invoke();
@@ -116,11 +123,17 @@ internal sealed partial class QuickAccessWindow : Window
 
     internal void ShowError(string message)
     {
-        _actionPending = false;
-        foreach (var tile in _tiles.Where(tile => tile.IsOptimistic))
+        _levelCommitTimer.Stop();
+        if (_pendingAction is { IsOptimistic: true } failed)
         {
-            UpdateTile(tile, tile.PreviousState);
-            tile.IsOptimistic = false;
+            failed.IsOptimistic = false;
+            UpdateTile(failed, failed.PreviousState);
+        }
+        _pendingAction = null;
+        foreach (var tile in _tiles.Where(tile => tile.PendingLevel is not null))
+        {
+            tile.PendingLevel = null;
+            UpdateTile(tile, tile.State);
         }
         SetActionsEnabled(_isConnected);
         ConnectionMessage.Text = message;
@@ -130,11 +143,12 @@ internal sealed partial class QuickAccessWindow : Window
     private void PopulateActions(IReadOnlyList<QuickActionDefinition> actions, bool isConnected)
     {
         _isConnected = isConnected;
-        _actionPending = false;
+        _pendingAction = null;
+        _levelCommitTimer.Stop();
         ActionsGrid.Children.Clear();
         ActionsGrid.RowDefinitions.Clear();
         _tiles.Clear();
-        var count = Math.Min(actions.Count, 8);
+        var count = Math.Min(actions.Count, QuickActionPolicy.MaximumActions);
         ConnectionMessage.Text = "Home Assistant is disconnected. Actions are unavailable.";
         ConnectionMessage.Visibility = isConnected ? Visibility.Collapsed : Visibility.Visible;
         EmptyState.Visibility = count == 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -145,20 +159,25 @@ internal sealed partial class QuickAccessWindow : Window
             : "Connect to Home Assistant to add actions.";
         EmptyActionButton.Content = isConnected ? "Add an action" : "Open settings";
 
-        for (var index = 0; index < count; index++)
+        var column = 0;
+        foreach (var action in actions.Take(count))
         {
-            if (index % 2 == 0)
+            var level = QuickActionPolicy.IsLevel(action.Operation);
+            if (level) column = 0;
+            if (column == 0)
                 ActionsGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-            var action = actions[index];
-            var button = CreateActionButton(action, isConnected);
-            Grid.SetRow(button, index / 2);
-            Grid.SetColumn(button, index % 2);
-            ActionsGrid.Children.Add(button);
+            var tile = level ? CreateLevelTile(action) : CreateActionButton(action, isConnected);
+            Grid.SetRow(tile.Element, ActionsGrid.RowDefinitions.Count - 1);
+            Grid.SetColumn(tile.Element, column);
+            if (level) Grid.SetColumnSpan(tile.Element, 2);
+            ActionsGrid.Children.Add(tile.Element);
+            _tiles.Add(tile);
+            if (!level) column = 1 - column;
         }
     }
 
-    private Button CreateActionButton(QuickActionDefinition action, bool isConnected)
+    private ActionTile CreateActionButton(QuickActionDefinition action, bool isConnected)
     {
         var content = new Grid { ColumnSpacing = 8 };
         content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(24) });
@@ -196,71 +215,118 @@ internal sealed partial class QuickAccessWindow : Window
             Padding = new Thickness(10, 8, 10, 8),
             IsEnabled = isConnected
         };
-        var tile = new ActionTile(action, button, icon, status);
-        _tiles.Add(tile);
+        var tile = new ActionTile(action, button, button) { Icon = icon, Status = status };
         UpdateTile(tile, null);
         if (isConnected && action.EntityId.Split('.')[0] is not ("script" or "scene" or "button"))
             status.Text = "Loading…";
-        button.Click += (_, _) =>
-        {
-            if (_actionPending) return;
-            _actionPending = true;
-            tile.PreviousState = tile.State;
-            var predicted = PredictState(action.Operation, action.EntityId, tile.State);
-            if (predicted is not null)
-            {
-                UpdateTile(tile, predicted);
-                tile.IsOptimistic = true;
-            }
-            ActionRequested?.Invoke(action);
-        };
+        button.Click += (_, _) => RequestAction(tile, null);
         button.AddHandler(UIElement.KeyDownEvent,
             new KeyEventHandler((_, args) => MoveTileFocus(tile, args)), handledEventsToo: true);
-        return button;
+        return tile;
+    }
+
+    private ActionTile CreateLevelTile(QuickActionDefinition action)
+    {
+        var view = new QuickAccessLevelTile();
+        var glyph = action.Operation == QuickActionPolicy.Brightness && action.Icon == QuickActionPolicy.DefaultIcon(action.EntityId)
+            ? QuickActionIcons.GlyphFor("mdi:brightness-6", action.EntityId)
+            : QuickActionIcons.GlyphFor(action.Icon, action.EntityId);
+        view.SetLabel(action.Label, glyph);
+        view.UpdateLevel(null, _isConnected ? "Loading…" : "Unavailable");
+        var tile = new ActionTile(action, view, view.Input) { LevelTile = view };
+        view.LevelChanged += level =>
+        {
+            tile.PendingLevel = level;
+            if (!tile.PointerDown) ScheduleLevelCommit();
+        };
+        view.Input.AddHandler(UIElement.PointerPressedEvent,
+            new PointerEventHandler((_, _) => tile.PointerDown = true), handledEventsToo: true);
+        view.Input.AddHandler(UIElement.PointerReleasedEvent, new PointerEventHandler(FinishPointer), handledEventsToo: true);
+        view.Input.AddHandler(UIElement.PointerCaptureLostEvent, new PointerEventHandler(FinishPointer), handledEventsToo: true);
+        return tile;
+
+        void FinishPointer(object sender, PointerRoutedEventArgs args)
+        {
+            tile.PointerDown = false;
+            ScheduleLevelCommit();
+        }
+    }
+
+    private void ScheduleLevelCommit()
+    {
+        _levelCommitTimer.Stop();
+        if (_tiles.Any(tile => tile.PendingLevel is not null && !tile.PointerDown)) _levelCommitTimer.Start();
+    }
+
+    private void CommitPendingLevel()
+    {
+        if (_pendingAction is not null || !_isConnected) return;
+        var tile = _tiles.FirstOrDefault(tile => tile.PendingLevel is not null && !tile.PointerDown);
+        if (tile?.PendingLevel is not { } level) return;
+        tile.PendingLevel = null;
+        if (tile.Input.IsEnabled && level != tile.State?.LevelFor(tile.Action.Operation))
+            RequestAction(tile, level);
+        else
+            ScheduleLevelCommit();
+    }
+
+    private void RequestAction(ActionTile tile, int? level)
+    {
+        if (_pendingAction is not null) return;
+        _pendingAction = tile;
+        tile.PreviousState = tile.State;
+        var predicted = level is { } percentage
+            ? tile.Action.Operation == QuickActionPolicy.Brightness
+                ? new QuickActionState(percentage == 0 ? "off" : "on", Brightness: percentage)
+                : new QuickActionState(tile.State?.State ?? "on", Volume: percentage)
+            : PredictState(tile.Action.Operation, tile.Action.EntityId, tile.State?.State) is { } state
+                ? new QuickActionState(state) : null;
+        if (predicted is not null)
+        {
+            UpdateTile(tile, predicted);
+            tile.IsOptimistic = true;
+        }
+        ActionRequested?.Invoke(tile.Action, level);
     }
 
     private void MoveTileFocus(ActionTile tile, KeyRoutedEventArgs args)
     {
-        var index = _tiles.IndexOf(tile);
-        if (index < 0) return;
-
-        var next = args.Key switch
-        {
-            Windows.System.VirtualKey.Left when index % 2 == 1 => index - 1,
-            Windows.System.VirtualKey.Right when index % 2 == 0 => index + 1,
-            Windows.System.VirtualKey.Up => index - 2,
-            Windows.System.VirtualKey.Down => index + 2,
-            _ => -1
-        };
         if (args.Key is not (Windows.System.VirtualKey.Left or Windows.System.VirtualKey.Right or
             Windows.System.VirtualKey.Up or Windows.System.VirtualKey.Down)) return;
         args.Handled = true;
-
-        if (args.Key is Windows.System.VirtualKey.Up or Windows.System.VirtualKey.Down)
+        var enabled = _tiles.Where(candidate => candidate.Input.IsEnabled);
+        var next = args.Key switch
         {
-            var step = args.Key == Windows.System.VirtualKey.Up ? -2 : 2;
-            while (next >= 0 && next < _tiles.Count && !_tiles[next].Button.IsEnabled)
-                next += step;
-        }
-        if (next >= _tiles.Count && args.Key == Windows.System.VirtualKey.Down && index % 2 == 1)
-            next = _tiles.Count - 1; // The final row may have only a left tile.
-        if (next >= 0 && next < _tiles.Count && _tiles[next].Button.IsEnabled)
-            _tiles[next].Button.Focus(FocusState.Keyboard);
+            Windows.System.VirtualKey.Left => enabled.FirstOrDefault(candidate => candidate.Row == tile.Row && candidate.Column < tile.Column),
+            Windows.System.VirtualKey.Right => enabled.FirstOrDefault(candidate => candidate.Row == tile.Row && candidate.Column > tile.Column),
+            Windows.System.VirtualKey.Up => NearestRow(-1),
+            Windows.System.VirtualKey.Down => NearestRow(1),
+            _ => null
+        };
+        next?.Input.Focus(FocusState.Keyboard);
+
+        ActionTile? NearestRow(int direction) => enabled
+            .Where(candidate => (candidate.Row - tile.Row) * direction > 0)
+            .OrderBy(candidate => Math.Abs(candidate.Row - tile.Row))
+            .ThenBy(candidate => Math.Abs(candidate.Column - tile.Column))
+            .FirstOrDefault();
     }
 
     internal void CompleteAction()
     {
-        _actionPending = false;
+        _pendingAction = null;
         SetActionsEnabled(_isConnected);
         ConnectionMessage.Visibility = _isConnected ? Visibility.Collapsed : Visibility.Visible;
+        ScheduleLevelCommit();
     }
 
-    internal void SetEntityStates(IReadOnlyDictionary<string, string>? states, bool preserveOptimistic = false)
+    internal void SetEntityStates(IReadOnlyDictionary<string, QuickActionState>? states, bool preserveOptimistic = false)
     {
-        if (!IsVisible || _actionPending) return;
-        if (states is null)
+        if (!IsVisible || _pendingAction is not null) return;
+        foreach (var tile in _tiles)
         {
-            foreach (var tile in _tiles)
+            if (tile.PendingLevel is not null || tile.PointerDown) continue;
+            if (states is null)
             {
                 if (tile.IsOptimistic && !preserveOptimistic)
                 {
@@ -271,26 +337,32 @@ internal sealed partial class QuickAccessWindow : Window
                 {
                     UpdateTile(tile, null);
                 }
+                continue;
             }
-            SetActionsEnabled(_isConnected);
-            return;
-        }
 
-        foreach (var tile in _tiles)
-        {
-            var state = states.TryGetValue(tile.Action.EntityId, out var found)
-                ? found : null;
-            if (preserveOptimistic && tile.IsOptimistic && state == tile.PreviousState)
+            var state = states.GetValueOrDefault(tile.Action.EntityId);
+            if (preserveOptimistic && tile.IsOptimistic && SameActionState(tile, state))
                 continue;
             tile.IsOptimistic = false;
             UpdateTile(tile, state);
         }
-        if (!_actionPending) SetActionsEnabled(_isConnected);
+        SetActionsEnabled(_isConnected);
     }
 
-    private void UpdateTile(ActionTile tile, string? state)
+    private static bool SameActionState(ActionTile tile, QuickActionState? state) => tile.LevelTile is not null
+        ? state?.LevelFor(tile.Action.Operation) == tile.PreviousState?.LevelFor(tile.Action.Operation)
+        : state?.State == tile.PreviousState?.State;
+
+    private static void UpdateTile(ActionTile tile, QuickActionState? reading)
     {
-        tile.State = state;
+        tile.State = reading;
+        if (tile.LevelTile is { } level)
+        {
+            level.UpdateLevel(reading?.LevelFor(tile.Action.Operation), "Unavailable");
+            return;
+        }
+
+        var state = reading?.State;
         var domain = tile.Action.EntityId.Split('.')[0];
         var status = domain switch
         {
@@ -306,11 +378,11 @@ internal sealed partial class QuickAccessWindow : Window
                 "on" => "On", "off" => "Off", "unavailable" => "Unavailable", _ => "Unknown"
             }
         };
-        tile.Status.Text = status;
-        tile.Icon.Foreground = state is "on" or "open" or "opening" ? AccentBrush : PrimaryBrush;
+        tile.Status!.Text = status;
+        tile.Icon!.Foreground = state is "on" or "open" or "opening" ? AccentBrush : PrimaryBrush;
         var description = $"{QuickActionLabels.Operation(tile.Action.Operation)} {tile.Action.Label}. {status}.";
-        AutomationProperties.SetName(tile.Button, description);
-        ToolTipService.SetToolTip(tile.Button, $"{description} {tile.Action.EntityId}");
+        AutomationProperties.SetName(tile.Input, description);
+        ToolTipService.SetToolTip(tile.Input, $"{description} {tile.Action.EntityId}");
     }
 
     private static Brush? AccentBrush => Application.Current.Resources.TryGetValue("AccentFillColorDefaultBrush", out var value)
@@ -322,11 +394,21 @@ internal sealed partial class QuickAccessWindow : Window
     private static Brush? SecondaryBrush => Application.Current.Resources.TryGetValue("TextFillColorSecondaryBrush", out var value)
         ? value as Brush : null;
 
-    private sealed record ActionTile(QuickActionDefinition Action, Button Button, FontIcon Icon, TextBlock Status)
+    private sealed class ActionTile(QuickActionDefinition action, FrameworkElement element, Control input)
     {
-        public string? State { get; set; }
-        public string? PreviousState { get; set; }
+        public QuickActionDefinition Action { get; } = action;
+        public FrameworkElement Element { get; } = element;
+        public Control Input { get; } = input;
+        public FontIcon? Icon { get; init; }
+        public TextBlock? Status { get; init; }
+        public QuickAccessLevelTile? LevelTile { get; init; }
+        public int Row => Grid.GetRow(Element);
+        public int Column => Grid.GetColumn(Element);
+        public QuickActionState? State { get; set; }
+        public QuickActionState? PreviousState { get; set; }
         public bool IsOptimistic { get; set; }
+        public int? PendingLevel { get; set; }
+        public bool PointerDown { get; set; }
     }
 
     private static string? PredictState(string operation, string entityId, string? current) => operation switch
@@ -344,10 +426,12 @@ internal sealed partial class QuickAccessWindow : Window
     private void SetActionsEnabled(bool enabled)
     {
         foreach (var tile in _tiles)
-            tile.Button.IsEnabled = enabled && tile.State != "unavailable";
+            tile.Input.IsEnabled = enabled && (tile.LevelTile is not null
+                ? tile.State?.LevelFor(tile.Action.Operation) is not null
+                : tile.State?.State != "unavailable");
     }
 
-    private void PositionNearCursor(int actionCount, bool hasMessage)
+    private void PositionNearCursor(bool hasMessage)
     {
         if (!GetCursorPos(out var cursor)) return;
         var monitor = MonitorFromPoint(cursor, 2); // Nearest monitor.
@@ -355,7 +439,7 @@ internal sealed partial class QuickAccessWindow : Window
         if (monitor == 0 || !GetMonitorInfo(monitor, ref info)) return;
 
         var work = info.WorkArea;
-        var (width, height) = ResizeForMonitor(monitor, work, actionCount, hasMessage);
+        var (width, height) = ResizeForMonitor(monitor, work, hasMessage);
 
         var x = Math.Clamp(cursor.X - width + 24, work.Left + EdgeGap, work.Right - width - EdgeGap);
         var above = cursor.Y - work.Top;
@@ -367,7 +451,7 @@ internal sealed partial class QuickAccessWindow : Window
         AppWindow.Move(new PointInt32(x, y));
     }
 
-    private void PositionForShortcut(int actionCount, bool hasMessage)
+    private void PositionForShortcut(bool hasMessage)
     {
         var foreground = GetForegroundWindow();
         var monitor = foreground != 0 ? MonitorFromWindow(foreground, 2) : 0;
@@ -376,20 +460,21 @@ internal sealed partial class QuickAccessWindow : Window
         if (monitor == 0 || !GetMonitorInfo(monitor, ref info)) return;
 
         var work = info.WorkArea;
-        var (width, height) = ResizeForMonitor(monitor, work, actionCount, hasMessage);
+        var (width, height) = ResizeForMonitor(monitor, work, hasMessage);
         var x = work.Left + (work.Right - work.Left - width) / 2;
         var y = work.Top + (work.Bottom - work.Top - height) / 2;
         AppWindow.Move(new PointInt32(x, y));
     }
 
-    private (int Width, int Height) ResizeForMonitor(nint monitor, NativeRect work,
-        int actionCount, bool hasMessage)
+    private (int Width, int Height) ResizeForMonitor(nint monitor, NativeRect work, bool hasMessage)
     {
         var scale = GetDpiForMonitor(monitor, 0, out var dpi, out _) == 0
             ? dpi / 96d
             : GetDpiForWindow(_windowHandle) / 96d;
-        var rows = (Math.Min(actionCount, 8) + 1) / 2;
-        var desiredHeight = (rows == 0 ? 210 : 112 + rows * 72) + (hasMessage ? 26 : 0);
+        var rows = ActionsGrid.RowDefinitions.Count;
+        var levelRows = _tiles.Count(tile => tile.LevelTile is not null);
+        var contentHeight = levelRows == 0 ? 112 + rows * 72 : 96 + (rows - levelRows) * 72 + levelRows * 78;
+        var desiredHeight = (rows == 0 ? 210 : contentHeight) + (hasMessage ? 26 : 0);
         var width = Math.Min((int)Math.Ceiling(WindowWidth * scale), work.Right - work.Left - EdgeGap * 2);
         var height = Math.Min((int)Math.Ceiling(desiredHeight * scale), work.Bottom - work.Top - EdgeGap * 2);
         AppWindow.Resize(new SizeInt32(width, height));

@@ -13,13 +13,27 @@
       <Label X="24" Y="114" Width="-24" Height="24" FontId="0">Preparing setup...</Label>
     </Page>
     <Page Name="Install">
-      <Label X="28" Y="118" Width="-28" Height="44" FontId="0">Connect this PC to Home Assistant for sensors, camera snapshots and actionable notifications.</Label>
-      <Label X="28" Y="178" Width="-28" Height="40" FontId="2">Installs for your Windows account.&#10;Microsoft components are downloaded during setup.</Label>
-      <Button Name="InstallButton" X="-124" Y="-18" Width="112" Height="30" TabStop="yes" FontId="0">Install</Button>
+      <Label X="28" Y="118" Width="-28" Height="44" FontId="0">
+        <Text>Connect this PC to Home Assistant for sensors, camera snapshots and actionable notifications.</Text>
+        <Text Condition="HassConnectInAppUpdate OR HassConnectInstalledVersion &gt; v0.0.0.0">A HASS Connect update is ready to install.</Text>
+      </Label>
+      <Label X="28" Y="178" Width="-28" Height="40" FontId="2">
+        <Text>Installs for your Windows account.&#10;Microsoft components are downloaded during setup.</Text>
+        <Text Condition="HassConnectInAppUpdate OR HassConnectInstalledVersion &gt; v0.0.0.0">HASS Connect may close during the update. Your saved settings are kept.</Text>
+      </Label>
+      <Button Name="InstallButton" X="-124" Y="-18" Width="112" Height="30" TabStop="yes" FontId="0">
+        <Text>Install</Text>
+        <Text Condition="HassConnectInAppUpdate OR HassConnectInstalledVersion &gt; v0.0.0.0">Update</Text>
+      </Button>
       <Button Name="InstallCancelButton" X="-24" Y="-18" Width="88" Height="30" TabStop="yes" FontId="0"><Text>Cancel</Text><CloseWindowAction /></Button>
     </Page>
     <Page Name="Progress">
-      <Label X="24" Y="114" Width="-24" Height="28" FontId="3"><Text>Installing HASS Connect</Text><Text Condition="WixBundleAction = 4">Removing HASS Connect</Text><Text Condition="WixBundleAction = 8">Repairing HASS Connect</Text></Label>
+      <Label X="24" Y="114" Width="-24" Height="28" FontId="3">
+        <Text>Installing HASS Connect</Text>
+        <Text Condition="WixBundleAction = 6 AND (HassConnectInAppUpdate OR HassConnectInstalledVersion &gt; v0.0.0.0)">Updating HASS Connect</Text>
+        <Text Condition="WixBundleAction = 4">Removing HASS Connect</Text>
+        <Text Condition="WixBundleAction = 8">Repairing HASS Connect</Text>
+      </Label>
       <Label Name="OverallProgressPackageText" X="24" Y="154" Width="-24" Height="40" FontId="0">Preparing...</Label>
       <Progressbar Name="OverallCalculatedProgressbar" X="24" Y="202" Width="-24" Height="12" />
       <Button Name="ProgressCancelButton" X="-24" Y="-18" Width="88" Height="30" TabStop="yes" FontId="0">Cancel</Button>
@@ -32,15 +46,24 @@
       <Button Name="ModifyCancelButton" X="-24" Y="-18" Width="88" Height="30" TabStop="yes" FontId="0"><Text>Close</Text><CloseWindowAction /></Button>
     </Page>
     <Page Name="Success">
-      <Label X="24" Y="114" Width="-24" Height="28" FontId="3"><Text>All done</Text><Text Condition="WixBundleAction = 6">Ready to connect</Text><Text Condition="WixBundleAction = 4">HASS Connect was removed</Text></Label>
-      <Label X="24" Y="150" Width="-24" Height="60" FontId="0" VisibleCondition="WixBundleAction = 6">Open the app to connect to Home Assistant and choose your sensors.</Label>
+      <Label X="24" Y="114" Width="-24" Height="28" FontId="3">
+        <Text>All done</Text>
+        <Text Condition="WixBundleAction = 6 AND (HassConnectInAppUpdate OR HassConnectInstalledVersion &gt; v0.0.0.0)">HASS Connect is up to date</Text>
+        <Text Condition="WixBundleAction = 6 AND NOT (HassConnectInAppUpdate OR HassConnectInstalledVersion &gt; v0.0.0.0)">Ready to connect</Text>
+        <Text Condition="WixBundleAction = 4">HASS Connect was removed</Text>
+      </Label>
+      <Label X="24" Y="150" Width="-24" Height="60" FontId="0"
+             VisibleCondition="WixBundleAction = 6 AND NOT (HassConnectInAppUpdate OR HassConnectInstalledVersion &gt; v0.0.0.0)">Open the app to connect to Home Assistant and choose your sensors.</Label>
       <Label X="24" Y="204" Width="-24" Height="40" FontId="2" VisibleCondition="WixStdBARestartRequired">Restart Windows to finish setup.</Label>
       <Button Name="LaunchButton" X="-124" Y="-18" Width="164" Height="30" TabStop="yes" FontId="0" HideWhenDisabled="yes">Open HASS Connect</Button>
       <Button Name="SuccessRestartButton" X="-124" Y="-18" Width="164" Height="30" TabStop="yes" FontId="0" HideWhenDisabled="yes">Restart Windows</Button>
       <Button Name="SuccessCloseButton" X="-24" Y="-18" Width="88" Height="30" TabStop="yes" FontId="0"><Text>Close</Text><CloseWindowAction /></Button>
     </Page>
     <Page Name="Failure">
-      <Label X="24" Y="114" Width="-24" Height="28" FontId="3">Setup could not finish</Label>
+      <Label X="24" Y="114" Width="-24" Height="28" FontId="3">
+        <Text>Setup could not finish</Text>
+        <Text Condition="HassConnectInAppUpdate AND (WixBundleInstalled OR HassConnectInstalledVersion &gt;= WixBundleVersion)">No update needed</Text>
+      </Label>
       <Hypertext Name="FailureMessageText" X="24" Y="148" Width="-24" Height="50" FontId="0" TabStop="yes" HideWhenDisabled="yes" />
       <Hypertext Name="FailureLogFileLink" X="24" Y="204" Width="-24" Height="24" FontId="0" TabStop="yes" HideWhenDisabled="yes">Open the &lt;a href="#"&gt;setup log&lt;/a&gt; for details.</Hypertext>
       <Button Name="FailureRestartButton" X="-124" Y="-18" Width="164" Height="30" TabStop="yes" FontId="0" HideWhenDisabled="yes">Restart Windows</Button>

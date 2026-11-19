@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using HassConnect.Core;
 
@@ -18,7 +19,7 @@ internal static class WindowsSensors
     {
         ArgumentNullException.ThrowIfNull(settings);
         var letters = StorageSensors.AvailableDriveLetters().ToHashSet();
-        foreach (var id in settings.EnabledSensors)
+        foreach (var id in settings.EnabledSensors.Concat(settings.PendingSensorChanges.Keys))
             if (DriveSensor.TryParse(id, out var letter, out _)) letters.Add(letter);
         return Available.Concat(letters.Order().SelectMany(DriveSensor.Create)).ToArray();
     }
@@ -30,9 +31,11 @@ internal static class WindowsSensors
         "cpu_usage" => new(id, CpuUsage()),
         "memory_usage" => new(id, MemoryUsage()),
         "session_locked" => new(id, SessionLocked()),
+        "windows_update_restart_required" => new(id, WindowsUpdateRestartRequired()),
         "battery_level" or "battery_charging" => new(id, PowerSensors.Read(id)),
         "disk_usage" or "disk_free_space" => new(id, StorageSensors.Read(id)),
         "microphone_in_use" or "webcam_in_use" => new(id, DeviceActivitySensors.Read(id)),
+        "speakers_in_use" => new(id, WindowsAudioControl.ReadSpeakerActivity()),
         "ip_address" or "network_adapter" or "download_speed" or "upload_speed" => new(id, NetworkSensors.Read(id)),
         _ when DriveSensor.TryParse(id, out _, out _) => new(id, StorageSensors.Read(id)),
         _ => throw new ArgumentOutOfRangeException(nameof(id))
@@ -73,6 +76,25 @@ internal static class WindowsSensors
         var memory = new MemoryStatus { Length = (uint)Marshal.SizeOf<MemoryStatus>() };
         if (!GlobalMemoryStatusEx(ref memory)) throw new Win32Exception(Marshal.GetLastWin32Error());
         return memory.MemoryLoad;
+    }
+
+    private static bool WindowsUpdateRestartRequired()
+    {
+        object? information = null;
+        try
+        {
+            var type = Type.GetTypeFromProgID("Microsoft.Update.SystemInfo", throwOnError: true)!;
+            information = Activator.CreateInstance(type)!;
+            return (bool)type.InvokeMember("RebootRequired", BindingFlags.GetProperty, null, information, null)!;
+        }
+        catch (Exception ex) when (ex is COMException or TargetInvocationException)
+        {
+            throw new InvalidDataException("Windows Update restart status is unavailable.", ex);
+        }
+        finally
+        {
+            if (information is not null) Marshal.FinalReleaseComObject(information);
+        }
     }
 
     private static bool SessionLocked()

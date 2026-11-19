@@ -18,8 +18,8 @@ internal static class WindowsAudioControl
     private const byte VirtualKeyMediaStop = 0xB2;
     private const byte VirtualKeyMediaPlayPause = 0xB3;
     private const byte VirtualKeyVolumeMute = 0xAD;
-    private static readonly Guid AudioEndpointVolumeId = typeof(IAudioEndpointVolume).GUID;
     private static readonly Guid DeviceEnumeratorId = new("BCDE0395-E52F-467C-8E3D-C4579291692E");
+    private const float ActivePeak = 0.001f;
 
     public static void SendMediaCommand(MediaCommand command) => PressKey(command switch
     {
@@ -35,16 +35,55 @@ internal static class WindowsAudioControl
     public static void SetVolume(int percentage)
     {
         if (percentage is < 0 or > 100) throw new ArgumentOutOfRangeException(nameof(percentage));
-        var enumeratorType = Type.GetTypeFromCLSID(DeviceEnumeratorId, throwOnError: true)!;
-        object? enumeratorObject = null;
+        var enumerator = CreateDeviceEnumerator();
         try
         {
-            enumeratorObject = Activator.CreateInstance(enumeratorType)!;
-            var enumerator = (IMMDeviceEnumerator)enumeratorObject;
             SetVolume(enumerator, ConsoleRole, percentage);
             SetVolume(enumerator, MultimediaRole, percentage);
         }
-        finally { Release(enumeratorObject); }
+        finally { Release(enumerator); }
+    }
+
+    public static bool ReadSpeakerActivity()
+    {
+        var enumerator = CreateDeviceEnumerator();
+        IMMDevice? device = null;
+        try
+        {
+            enumerator.GetDefaultAudioEndpoint(AudioRenderFlow, MultimediaRole, out device);
+            var volume = Activate<IAudioEndpointVolume>(device);
+            try
+            {
+                volume.GetMute(out var muted);
+                volume.GetMasterVolumeLevelScalar(out var level);
+                if (muted || level <= 0) return false;
+            }
+            finally { Release(volume); }
+
+            var meter = Activate<IAudioMeterInformation>(device);
+            try
+            {
+                // The endpoint meter is measured before the master volume and never reads audio samples.
+                meter.GetPeakValue(out var peak);
+                return peak >= ActivePeak;
+            }
+            finally { Release(meter); }
+        }
+        finally
+        {
+            Release(device);
+            Release(enumerator);
+        }
+    }
+
+    private static IMMDeviceEnumerator CreateDeviceEnumerator() =>
+        (IMMDeviceEnumerator)Activator.CreateInstance(Type.GetTypeFromCLSID(DeviceEnumeratorId, throwOnError: true)!)!;
+
+    private static T Activate<T>(IMMDevice device)
+    {
+        var id = typeof(T).GUID;
+        device.Activate(ref id, ComContextAll, nint.Zero, out var endpoint);
+        return (T)endpoint;
     }
 
     private static void PressKey(byte key)
@@ -65,17 +104,16 @@ internal static class WindowsAudioControl
     private static void SetVolume(IMMDeviceEnumerator enumerator, int role, int percentage)
     {
         IMMDevice? device = null;
-        object? endpointObject = null;
+        IAudioEndpointVolume? endpoint = null;
         try
         {
             enumerator.GetDefaultAudioEndpoint(AudioRenderFlow, role, out device);
-            var interfaceId = AudioEndpointVolumeId;
-            device.Activate(ref interfaceId, ComContextAll, nint.Zero, out endpointObject);
-            ((IAudioEndpointVolume)endpointObject).SetMasterVolumeLevelScalar(percentage / 100f, Guid.Empty);
+            endpoint = Activate<IAudioEndpointVolume>(device);
+            endpoint.SetMasterVolumeLevelScalar(percentage / 100f, Guid.Empty);
         }
         finally
         {
-            Release(endpointObject);
+            Release(endpoint);
             Release(device);
         }
     }
@@ -152,7 +190,21 @@ internal static class WindowsAudioControl
         void RegisterControlChangeNotify(nint notify);
         void UnregisterControlChangeNotify(nint notify);
         void GetChannelCount(out uint count);
-        void SetMasterVolumeLevel(float level, Guid context);
-        void SetMasterVolumeLevelScalar(float level, Guid context);
+        void SetMasterVolumeLevel(float level, in Guid context);
+        void SetMasterVolumeLevelScalar(float level, in Guid context);
+        void GetMasterVolumeLevel(out float level);
+        void GetMasterVolumeLevelScalar(out float level);
+        void SetChannelVolumeLevel(uint channel, float level, in Guid context);
+        void SetChannelVolumeLevelScalar(uint channel, float level, in Guid context);
+        void GetChannelVolumeLevel(uint channel, out float level);
+        void GetChannelVolumeLevelScalar(uint channel, out float level);
+        void SetMute([MarshalAs(UnmanagedType.Bool)] bool muted, in Guid context);
+        void GetMute([MarshalAs(UnmanagedType.Bool)] out bool muted);
+    }
+
+    [ComImport, Guid("C02216F6-8C67-4B5B-9D00-D008E73E0064"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IAudioMeterInformation
+    {
+        void GetPeakValue(out float peak);
     }
 }

@@ -135,16 +135,29 @@ the [PC command reference](docs/commands.md) and [custom-command guide](docs/cus
 
 ## Quick access
 
-Open **Quick access** in the app to choose up to eight Home Assistant entities. Search by
+Open **Quick access** in the app to add up to eight Home Assistant actions. Search by
 name or entity ID, choose an action and icon, then use the arrows to set the tray order.
 Lights, switches, fans and toggle helpers support toggle, on and off; scripts, scenes and
 buttons support run. Covers offer the actions supported by each device, including toggle
-when both open and close are available. Click the tray icon to use the actions without
-opening a browser. You can also set an optional keyboard shortcut on the Quick access
-page; it is off by default. Arrow keys move between action tiles, and Tab reaches the
-footer controls. The popup stays open after an action and shows the latest state reported
-by Home Assistant. Click away or press Escape to close it. Actions are
-unavailable while Home Assistant is disconnected.
+when both open and close are available. Add a **Brightness slider** for a dimmable
+light or a **Volume slider** for a media player that supports absolute volume.
+Each slider spans the popup and displays its current percentage. Setting brightness to
+0% turns the light off.
+
+<img src="docs/images/quick-access-sliders.png" width="360" alt="Quick access with Hall lights, Blinds, a brightness slider and a volume slider">
+
+Click the tray icon or set a keyboard shortcut on the Quick access page. Tab moves
+between controls, and the arrow keys adjust a focused slider. The popup stays open
+after an action and shows the latest state reported by Home Assistant. Click away
+or press Escape to close it.
+
+## Move settings to another PC
+
+Under **Settings → General → Settings file**, open **Transfer** and choose **Export
+settings** to save a JSON file. Choose **Import settings** on the other PC and confirm to replace its appearance, sensor
+choices, notification sound and Quick access actions. Connect each PC to Home
+Assistant with its own pairing. The export contains only the preferences listed
+above. Quick access actions refer to their original Home Assistant entity IDs.
 
 ## Privacy and updates
 
@@ -152,7 +165,7 @@ Credentials are encrypted for your Windows account. Settings and logs stay in
 `%LOCALAPPDATA%/HassConnect`. No location updates are sent. Home Assistant may create
 a device tracker during registration; you can disable it.
 
-The **Updates** section checks GitHub automatically. After confirmation, HASS Connect can download,
-verify and open the official Setup bundle; nothing is installed without user action.
+The **Updates** section checks GitHub automatically. Select **Get update** to download
+and verify Setup, then select **Update** in Setup to install it.
 
 [MIT License](LICENSE) · By [alphasixtyfive](https://github.com/alphasixtyfive)

@@ -5,7 +5,21 @@ namespace HassConnect.Core;
 
 public sealed record QuickActionDefinition(string EntityId, string Label, string Icon, string Operation);
 
-public sealed record QuickActionEntity(string EntityId, string Name, string Icon, string State, int? SupportedFeatures = null);
+public sealed record QuickActionEntity(string EntityId, string Name, string Icon, string State,
+    int? SupportedFeatures = null, bool SupportsBrightness = false)
+{
+    public IReadOnlyList<string> Operations => QuickActionPolicy.AllowedOperations(EntityId, SupportedFeatures ?? 0, SupportsBrightness);
+}
+
+public sealed record QuickActionState(string State, int? Brightness = null, int? Volume = null)
+{
+    public int? LevelFor(string operation) => operation switch
+    {
+        QuickActionPolicy.Brightness => Brightness,
+        QuickActionPolicy.Volume => Volume,
+        _ => null
+    };
+}
 
 public static partial class QuickActionPolicy
 {
@@ -13,6 +27,7 @@ public static partial class QuickActionPolicy
     private const int CoverOpen = 1;
     private const int CoverClose = 2;
     private const int CoverStop = 8;
+    private const int MediaPlayerVolumeSet = 4;
 
     public const int MaximumActions = 8;
     public const string Toggle = "toggle";
@@ -22,10 +37,14 @@ public static partial class QuickActionPolicy
     public const string OpenCover = "open_cover";
     public const string CloseCover = "close_cover";
     public const string StopCover = "stop_cover";
+    public const string Brightness = "brightness";
+    public const string Volume = "volume";
 
     private static readonly IReadOnlyList<string> ToggleOperations =
         Array.AsReadOnly([Toggle, TurnOn, TurnOff]);
     private static readonly IReadOnlyList<string> RunOperations = Array.AsReadOnly([Run]);
+    private static readonly IReadOnlyList<string> LightLevelOperations = Array.AsReadOnly([Toggle, TurnOn, TurnOff, Brightness]);
+    private static readonly IReadOnlyList<string> MediaPlayerOperations = Array.AsReadOnly([Volume]);
     private static readonly IReadOnlyList<string> CoverOperations =
         Array.AsReadOnly([Toggle, OpenCover, CloseCover, StopCover]);
     private static readonly IReadOnlyList<string> NoOperations = Array.Empty<string>();
@@ -77,7 +96,10 @@ public static partial class QuickActionPolicy
         return result;
     }
 
-    public static IReadOnlyList<string> AllowedOperations(string? entityId, int? supportedFeatures = null)
+    public static bool IsLevel(string operation) => operation is Brightness or Volume;
+
+    public static IReadOnlyList<string> AllowedOperations(string? entityId, int? supportedFeatures = null,
+        bool? supportsBrightness = null)
     {
         var domain = Domain(entityId);
         if (domain == "cover")
@@ -94,7 +116,10 @@ public static partial class QuickActionPolicy
         }
         return domain switch
         {
+            "light" when supportsBrightness != false => LightLevelOperations,
             "light" or "switch" or "input_boolean" or "fan" => ToggleOperations,
+            "media_player" when supportedFeatures is null ||
+                supportedFeatures >= 0 && (supportedFeatures.Value & MediaPlayerVolumeSet) != 0 => MediaPlayerOperations,
             "script" or "scene" or "button" => RunOperations,
             _ => NoOperations
         };
@@ -109,6 +134,7 @@ public static partial class QuickActionPolicy
         "script" => "mdi:script-text",
         "scene" => "mdi:palette",
         "button" => "mdi:gesture-tap-button",
+        "media_player" => "mdi:volume-high",
         _ => "mdi:home-assistant"
     };
 

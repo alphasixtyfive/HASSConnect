@@ -41,9 +41,17 @@ function Assert-Removed($process) {
 # Fresh installation, launch and removal of the candidate.
 Run-Setup $setup '/install'
 $running = Start-InstalledApp
+$repeatLog = Join-Path ([IO.Path]::GetTempPath()) 'hassconnect-repeat-update.log'
+$repeat = Start-Process $setup -ArgumentList "/install /quiet /norestart HassConnectInAppUpdate=1 /log `"$repeatLog`"" -WindowStyle Hidden -Wait -PassThru
+if ($repeat.ExitCode -eq 0 -or
+    -not (Select-String -LiteralPath $repeatLog -Pattern 'This version or a newer version of HASS Connect is already installed.' -SimpleMatch -Quiet)) {
+    throw 'The in-app update path did not stop when this version was already installed.'
+}
+$running.Refresh()
+if ($running.HasExited) { throw 'A redundant update closed the installed app.' }
 Run-Setup $setup '/uninstall'
 Assert-Removed $running
-Write-Host 'Fresh installation, launch and removal passed.'
+Write-Host 'Fresh installation, launch, redundant update and removal passed.'
 
 # Download the preceding published version only when it is older than the candidate.
 $releaseText = & gh release view --json tagName,assets
@@ -78,7 +86,7 @@ $credentialsHash = (Get-FileHash -LiteralPath $credentialsPath).Hash
 $oldRunning = Start-InstalledApp
 New-Item -Path $runKey -Force | Out-Null
 Set-ItemProperty -LiteralPath $runKey -Name HassConnect -Value ('"' + $app + '" --tray')
-Run-Setup $setup '/install'
+Run-Setup $setup '/install HassConnectInAppUpdate=1'
 $oldRunning.Refresh()
 if (-not $oldRunning.HasExited) { throw 'Upgrade left the preceding app running.' }
 if ([version](Get-Item -LiteralPath $app).VersionInfo.ProductVersion.Split('+')[0] -ne [version]$version) {

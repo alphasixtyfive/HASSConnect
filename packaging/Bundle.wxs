@@ -8,6 +8,11 @@
           LaunchWorkingFolder="[LocalAppDataFolder]Programs\HASSConnect" />
       <Payload SourceFile="$(var.AppSource)\Assets\app.ico" Name="app.ico" />
     </BootstrapperApplication>
+    <Variable Name="HassConnectInAppUpdate" Type="numeric" Value="0" bal:Overridable="yes" />
+    <bal:Condition Condition="NOT HassConnectInAppUpdate OR (NOT WixBundleInstalled AND NOT (HassConnectInstalledVersion &gt;= WixBundleVersion))"
+                   Message="This version or a newer version of HASS Connect is already installed. Open HASS Connect from the Start menu." />
+    <util:ProductSearch UpgradeCode="4425a4df-c2aa-45cf-bce4-f50a0945dddb"
+                        Variable="HassConnectInstalledVersion" Result="version" />
     <netfx:DotNetCoreSearch RuntimeType="core" Platform="x64" MajorVersion="10" Variable="DotNetRuntimeVersion" />
     <util:RegistrySearch Root="HKLM" Key="SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64"
                          Value="Version" Variable="VisualCppVersion" Result="value" Bitness="always64" />

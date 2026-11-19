@@ -76,10 +76,11 @@ To add a sensor, define its stable identity and metadata in Core, implement its 
 `Directory.Build.props` supplies the version for all application assemblies and HA
 registration.
 
-The Updates section checks the latest stable GitHub release automatically when the app starts. A newer release can be
-downloaded and installed from the app after explicit confirmation. Downloads are accepted only from the configured
-repository and only when `SHA256SUMS.txt` verifies the exact `HASSConnect-X.Y.Z-Setup-x64.exe` asset. If a release is
-missing either asset, the app falls back to its release page. Publish a stable release tagged `vX.Y.Z` to make it available.
+The Updates section checks the latest stable GitHub release automatically when the app starts. **Get update** downloads
+Setup and opens its **Update** confirmation. Downloads start in the configured repository and follow redirects only to
+GitHub release asset hosts. The installer must match the release's size and the checksum in `SHA256SUMS.txt`. If a
+release is missing either asset, the app opens its release page when requested. Publish a stable release tagged
+`vX.Y.Z` to make it available.
 
 ## Windows notifications
 

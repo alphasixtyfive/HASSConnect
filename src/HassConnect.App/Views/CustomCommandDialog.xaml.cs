@@ -69,7 +69,6 @@ public sealed partial class CustomCommandDialog : ContentDialog
                 "Remove command?",
                 $"Remove “{existing!.Name}”? The program or script stays on this PC.",
                 "Remove",
-                defaultToPrimary: false,
                 destructive: true);
             if (!confirmed)
             {

@@ -13,6 +13,8 @@ internal static class QuickActionLabels
         QuickActionPolicy.OpenCover => "Open",
         QuickActionPolicy.CloseCover => "Close",
         QuickActionPolicy.StopCover => "Stop",
+        QuickActionPolicy.Brightness => "Brightness slider",
+        QuickActionPolicy.Volume => "Volume slider",
         _ => operation
     };
 }

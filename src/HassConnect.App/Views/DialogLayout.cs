@@ -12,7 +12,6 @@ internal static class DialogLayout
         string title,
         string message,
         string primaryText,
-        bool defaultToPrimary,
         bool destructive = false)
     {
         var accepted = false;
@@ -28,7 +27,7 @@ internal static class DialogLayout
         primary.Click += (_, _) => { accepted = true; dialog.Hide(); };
         cancel.Click += (_, _) => dialog.Hide();
         dialog.KeyDown += (_, args) => CloseOnEscape(dialog, args);
-        dialog.Opened += (_, _) => (defaultToPrimary ? primary : cancel).Focus(FocusState.Programmatic);
+        dialog.Opened += (_, _) => cancel.Focus(FocusState.Programmatic);
 
         var actions = new StackPanel
         {

@@ -10,6 +10,8 @@ public sealed class QuickActionTests
 {
     [Theory]
     [InlineData("light.desk", "toggle")]
+    [InlineData("light.desk", "brightness")]
+    [InlineData("media_player.speakers", "volume")]
     [InlineData("fan.office", "turn_on")]
     [InlineData("input_boolean.away", "turn_off")]
     [InlineData("script.good_night", "run")]
@@ -29,6 +31,8 @@ public sealed class QuickActionTests
     [Theory]
     [InlineData("sensor.temperature", "toggle")]
     [InlineData("light.desk", "run")]
+    [InlineData("light.desk", "volume")]
+    [InlineData("media_player.speakers", "brightness")]
     [InlineData("button.restart", "toggle")]
     [InlineData("cover.blinds", "turn_on")]
     [InlineData("light.desk/../../evil", "toggle")]
@@ -123,9 +127,44 @@ public sealed class QuickActionTests
 
         Assert.Equal(1, requests);
         Assert.Equal(3, states.Count);
-        Assert.Equal("on", states["light.desk"]);
-        Assert.Equal("closed", states["cover.gate"]);
-        Assert.Equal("off", states["switch.missing"]);
+        Assert.Equal("on", states["light.desk"].State);
+        Assert.Equal("closed", states["cover.gate"].State);
+        Assert.Equal("off", states["switch.missing"].State);
+    }
+
+    [Fact]
+    public async Task ReadsLevelsAndExposesSlidersOnlyForCapableEntities()
+    {
+        using var handler = new Handler(_ => Task.FromResult(Response("""
+            [
+              {"entity_id":"light.dimmer","state":"on","attributes":{"supported_color_modes":["rgb"],"brightness":179}},
+              {"entity_id":"light.off","state":"off","attributes":{"supported_color_modes":["brightness"]}},
+              {"entity_id":"light.basic","state":"off","attributes":{"supported_color_modes":["onoff"]}},
+              {"entity_id":"light.away","state":"unavailable","attributes":{"supported_color_modes":["brightness"],"brightness":90}},
+              {"entity_id":"media_player.speakers","state":"playing","attributes":{"supported_features":132,"volume_level":0.35}},
+              {"entity_id":"media_player.fixed","state":"playing","attributes":{"supported_features":128,"volume_level":0.7}},
+              {"entity_id":"media_player.invalid","state":"playing","attributes":{"supported_features":4,"volume_level":1.5}}
+            ]
+            """)));
+        using var client = new HaClient(new Uri("https://ha.example/"), "test-only", handler);
+
+        var entities = (await client.GetQuickActionEntitiesAsync(CancellationToken.None))
+            .ToDictionary(entity => entity.EntityId);
+        Assert.Contains(QuickActionPolicy.Brightness, entities["light.dimmer"].Operations);
+        Assert.Contains(QuickActionPolicy.Brightness, entities["light.off"].Operations);
+        Assert.DoesNotContain(QuickActionPolicy.Brightness, entities["light.basic"].Operations);
+        Assert.Equal([QuickActionPolicy.Volume], entities["media_player.speakers"].Operations);
+        Assert.DoesNotContain("media_player.fixed", entities.Keys);
+
+        var states = await client.GetQuickActionStatesAsync(
+            [.. entities.Keys, "media_player.fixed"], CancellationToken.None);
+        Assert.Equal(70, states["light.dimmer"].Brightness);
+        Assert.Equal(0, states["light.off"].Brightness);
+        Assert.Null(states["light.basic"].Brightness);
+        Assert.Null(states["light.away"].Brightness);
+        Assert.Equal(35, states["media_player.speakers"].Volume);
+        Assert.Null(states["media_player.fixed"].Volume);
+        Assert.Null(states["media_player.invalid"].Volume);
     }
 
     [Fact]
@@ -221,6 +260,47 @@ public sealed class QuickActionTests
         using var client = new HaClient(new Uri("https://ha.example/"), "test-only", handler);
         await Assert.ThrowsAsync<ArgumentException>(() => client.InvokeQuickActionAsync(
             new("sensor.temperature", "Temperature", "mdi:thermometer", "toggle"), CancellationToken.None));
+    }
+
+    [Theory]
+    [InlineData("light.desk", "brightness", 70, "light/turn_on", "brightness_pct", 70)]
+    [InlineData("light.desk", "brightness", 0, "light/turn_off", null, 0)]
+    [InlineData("media_player.speakers", "volume", 35, "media_player/volume_set", "volume_level", 0.35)]
+    [InlineData("media_player.speakers", "volume", 0, "media_player/volume_set", "volume_level", 0)]
+    public async Task SendsOnlyTheSelectedEntityAndLevel(string entityId, string operation, int percent,
+        string service, string? property, double value)
+    {
+        using var handler = new Handler(async request =>
+        {
+            Assert.Equal(HttpMethod.Post, request.Method);
+            Assert.Equal("/api/services/" + service, request.RequestUri?.AbsolutePath);
+            using var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync());
+            Assert.Equal(entityId, body.RootElement.GetProperty("entity_id").GetString());
+            if (property is null) Assert.Single(body.RootElement.EnumerateObject());
+            else
+            {
+                Assert.Equal(2, body.RootElement.EnumerateObject().Count());
+                Assert.Equal(value, body.RootElement.GetProperty(property).GetDouble());
+            }
+            return Response("[]");
+        });
+        using var client = new HaClient(new Uri("https://ha.example/"), "test-only", handler);
+        await client.InvokeQuickActionAsync(QuickActionPolicy.Create(entityId, "Level", "", operation),
+            CancellationToken.None, percent);
+    }
+
+    [Theory]
+    [InlineData("brightness", null)]
+    [InlineData("brightness", 101)]
+    [InlineData("brightness", -1)]
+    [InlineData("toggle", 50)]
+    public async Task RejectsMissingOutOfRangeOrUnexpectedLevelBeforeMakingRequest(string operation, int? percentage)
+    {
+        using var handler = new Handler(_ => throw new InvalidOperationException("Request must not be sent."));
+        using var client = new HaClient(new Uri("https://ha.example/"), "test-only", handler);
+        var action = QuickActionPolicy.Create("light.desk", "Level", "", operation);
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => client.InvokeQuickActionAsync(action, CancellationToken.None, percentage));
     }
 
     private static HttpResponseMessage Response(string json) => new(HttpStatusCode.OK)

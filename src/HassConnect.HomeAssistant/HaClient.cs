@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using HassConnect.Core;
@@ -44,81 +45,78 @@ public sealed class HaClient : IDisposable
 
     public async Task<IReadOnlyList<QuickActionEntity>> GetQuickActionEntitiesAsync(CancellationToken ct)
     {
-        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        deadline.CancelAfter(_http.Timeout);
-        ct = deadline.Token;
-        using var request = Authorized(HttpMethod.Get, "api/states");
-        using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct)
-            .ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
-        await using var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
         var entities = new List<QuickActionEntity>();
-        try
-        {
-            await foreach (var item in JsonSerializer.DeserializeAsyncEnumerable<JsonElement>(
-                stream, cancellationToken: ct).ConfigureAwait(false))
-            {
-                if (ReadQuickActionEntity(item) is { } entity) entities.Add(entity);
-            }
-        }
-        catch (JsonException exception)
-        {
-            throw new InvalidDataException("The server did not return Home Assistant entities.", exception);
-        }
+        await foreach (var item in ReadEntitiesAsync(ct).ConfigureAwait(false))
+            if (ReadQuickActionEntity(item) is { } entity) entities.Add(entity);
+
         return entities.OrderBy(entity => entity.Name, StringComparer.CurrentCultureIgnoreCase)
             .ThenBy(entity => entity.EntityId, StringComparer.Ordinal).ToArray();
     }
 
-    public async Task<IReadOnlyDictionary<string, string>> GetQuickActionStatesAsync(
+    public async Task<IReadOnlyDictionary<string, QuickActionState>> GetQuickActionStatesAsync(
         IReadOnlyCollection<string> entityIds, CancellationToken ct)
     {
-        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        deadline.CancelAfter(_http.Timeout);
-        ct = deadline.Token;
         ArgumentNullException.ThrowIfNull(entityIds);
         if (entityIds.Count > QuickActionPolicy.MaximumActions || entityIds.Any(string.IsNullOrWhiteSpace))
             throw new ArgumentException("Choose up to eight configured entities.", nameof(entityIds));
         var remaining = new HashSet<string>(entityIds, StringComparer.Ordinal);
-        var states = new Dictionary<string, string>(remaining.Count, StringComparer.Ordinal);
+        var states = new Dictionary<string, QuickActionState>(remaining.Count, StringComparer.Ordinal);
         if (remaining.Count == 0) return states;
 
-        using var request = Authorized(HttpMethod.Get, "api/states");
-        using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct)
-            .ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
-        await using var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
-        try
+        await foreach (var item in ReadEntitiesAsync(ct).ConfigureAwait(false))
         {
-            await foreach (var item in JsonSerializer.DeserializeAsyncEnumerable<JsonElement>(
-                stream, cancellationToken: ct).ConfigureAwait(false))
-            {
-                var id = StringProperty(item, "entity_id");
-                if (id is null || !remaining.Contains(id)) continue;
-                var state = StringProperty(item, "state");
-                if (state is null) continue;
-                remaining.Remove(id);
-                states.Add(id, state);
-                if (remaining.Count == 0) break;
-            }
-        }
-        catch (JsonException exception)
-        {
-            throw new InvalidDataException("The server did not return Home Assistant entities.", exception);
+            var id = StringProperty(item, "entity_id");
+            var state = StringProperty(item, "state");
+            if (id is null || state is null || !remaining.Remove(id)) continue;
+            states.Add(id, ReadQuickActionState(id, state, EntityAttributes(item)));
+            if (remaining.Count == 0) break;
         }
         return states;
     }
 
-    public async Task InvokeQuickActionAsync(QuickActionDefinition action, CancellationToken ct)
+    private async IAsyncEnumerable<JsonElement> ReadEntitiesAsync([EnumeratorCancellation] CancellationToken ct)
+    {
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        deadline.CancelAfter(_http.Timeout);
+        using var request = Authorized(HttpMethod.Get, "api/states");
+        using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, deadline.Token)
+            .ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+        await using var stream = await response.Content.ReadAsStreamAsync(deadline.Token).ConfigureAwait(false);
+        await using var entities = JsonSerializer.DeserializeAsyncEnumerable<JsonElement>(stream).GetAsyncEnumerator(deadline.Token);
+        while (true)
+        {
+            bool hasNext;
+            try { hasNext = await entities.MoveNextAsync().ConfigureAwait(false); }
+            catch (JsonException ex)
+            {
+                throw new InvalidDataException("The server did not return Home Assistant entities.", ex);
+            }
+            if (!hasNext) yield break;
+            yield return entities.Current;
+        }
+    }
+
+    public async Task InvokeQuickActionAsync(QuickActionDefinition action, CancellationToken ct, int? percentage = null)
     {
         ArgumentNullException.ThrowIfNull(action);
         var validated = QuickActionPolicy.Create(action.EntityId, action.Label, action.Icon, action.Operation);
+        if (percentage is < 0 or > 100 || QuickActionPolicy.IsLevel(validated.Operation) != percentage.HasValue)
+            throw new ArgumentException("Enter a percentage from 0 to 100 for a level action.", nameof(percentage));
+
         var dot = validated.EntityId.IndexOf('.');
         var domain = validated.EntityId[..dot];
-        var service = validated.Operation == QuickActionPolicy.Run
-            ? domain == "button" ? "press" : "turn_on"
-            : validated.Operation;
-        using var request = Authorized(HttpMethod.Post, $"api/services/{domain}/{service}");
-        request.Content = JsonContent.Create(new { entity_id = validated.EntityId });
+        var entity = new { entity_id = validated.EntityId };
+        (string Service, object Data) command = validated.Operation switch
+        {
+            QuickActionPolicy.Run => (domain == "button" ? "press" : "turn_on", entity),
+            QuickActionPolicy.Brightness when percentage == 0 => ("turn_off", entity),
+            QuickActionPolicy.Brightness => ("turn_on", new { entity.entity_id, brightness_pct = percentage }),
+            QuickActionPolicy.Volume => ("volume_set", new { entity.entity_id, volume_level = percentage / 100d }),
+            _ => (validated.Operation, entity)
+        };
+        using var request = Authorized(HttpMethod.Post, $"api/services/{domain}/{command.Service}");
+        request.Content = JsonContent.Create(command.Data);
         using var response = await _http.SendAsync(request, ct);
         response.EnsureSuccessStatusCode();
     }
@@ -133,15 +131,10 @@ public sealed class HaClient : IDisposable
         var id = StringProperty(item, "entity_id");
         if (id is null) return null;
 
-        var attributes = item.TryGetProperty("attributes", out var value) && value.ValueKind == JsonValueKind.Object
-            ? value : default;
-        int? supportedFeatures = attributes.ValueKind == JsonValueKind.Object &&
-            attributes.TryGetProperty("supported_features", out var featureValue) &&
-            featureValue.ValueKind == JsonValueKind.Number && featureValue.TryGetInt32(out var features) && features >= 0
-                ? features : null;
-        // Unknown cover capabilities cannot safely be presented as supported actions.
-        if (id.StartsWith("cover.", StringComparison.Ordinal) && supportedFeatures is null) return null;
-        var operations = QuickActionPolicy.AllowedOperations(id, supportedFeatures);
+        var attributes = EntityAttributes(item);
+        var supportedFeatures = NumberProperty(attributes, "supported_features");
+        var supportsBrightness = id.StartsWith("light.", StringComparison.Ordinal) && SupportsBrightness(attributes);
+        var operations = QuickActionPolicy.AllowedOperations(id, supportedFeatures ?? 0, supportsBrightness);
         if (operations.Count == 0) return null;
 
         var name = (StringProperty(attributes, "friendly_name") ?? id).Trim();
@@ -158,21 +151,48 @@ public sealed class HaClient : IDisposable
         };
         var icon = StringProperty(attributes, "icon") ?? defaultIcon;
         var state = StringProperty(item, "state") ?? "unknown";
-        try
+        try { return CreateEntity(icon); }
+        catch (ArgumentException ex) when (ex.ParamName == "icon") { return CreateEntity(defaultIcon); }
+        catch (ArgumentException) { return null; }
+
+        QuickActionEntity CreateEntity(string selectedIcon)
         {
-            var action = QuickActionPolicy.Create(id, name, icon, operations[0]);
-            return new(action.EntityId, action.Label, action.Icon, state, supportedFeatures);
+            var action = QuickActionPolicy.Create(id, name, selectedIcon, operations[0]);
+            return new(action.EntityId, action.Label, action.Icon, state, supportedFeatures, supportsBrightness);
         }
-        catch (ArgumentException)
+    }
+
+    private static JsonElement EntityAttributes(JsonElement item) =>
+        item.TryGetProperty("attributes", out var attributes) && attributes.ValueKind == JsonValueKind.Object
+            ? attributes : default;
+
+    private static int? NumberProperty(JsonElement item, string property) =>
+        item.ValueKind == JsonValueKind.Object && item.TryGetProperty(property, out var value) &&
+        value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var number) ? number : null;
+
+    private static bool SupportsBrightness(JsonElement attributes) =>
+        attributes.ValueKind == JsonValueKind.Object &&
+        (attributes.TryGetProperty("supported_color_modes", out var modes) && modes.ValueKind == JsonValueKind.Array
+            ? modes.EnumerateArray().Any(mode => mode.ValueKind == JsonValueKind.String &&
+                mode.GetString() is "brightness" or "color_temp" or "hs" or "xy" or "rgb" or "rgbw" or "rgbww" or "white")
+            : NumberProperty(attributes, "brightness") is >= 0 and <= 255);
+
+    private static QuickActionState ReadQuickActionState(string id, string state, JsonElement attributes)
+    {
+        if (state is "unavailable" or "unknown") return new(state);
+
+        if (id.StartsWith("light.", StringComparison.Ordinal) && SupportsBrightness(attributes))
         {
-            // Home Assistant may report an unsupported icon; retain the entity with its domain icon.
-            try
-            {
-                var action = QuickActionPolicy.Create(id, name, defaultIcon, operations[0]);
-                return new(action.EntityId, action.Label, action.Icon, state, supportedFeatures);
-            }
-            catch (ArgumentException) { return null; }
+            var brightness = NumberProperty(attributes, "brightness");
+            return new(state, Brightness: state == "off" ? 0 :
+                brightness is >= 0 and <= 255 ? (int)Math.Round(brightness.Value * 100d / 255) : null);
         }
+        if (id.StartsWith("media_player.", StringComparison.Ordinal) &&
+            QuickActionPolicy.AllowedOperations(id, NumberProperty(attributes, "supported_features") ?? 0).Count != 0 &&
+            attributes.TryGetProperty("volume_level", out var volume) && volume.ValueKind == JsonValueKind.Number &&
+            volume.TryGetDouble(out var level) && level is >= 0 and <= 1)
+            return new(state, Volume: (int)Math.Round(level * 100));
+        return new(state);
     }
 
     public async Task<string> RegisterAsync(Settings settings, CancellationToken ct)

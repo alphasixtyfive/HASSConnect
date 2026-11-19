@@ -160,15 +160,18 @@
                     <TextBlock x:Name="TokenError" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Style="{StaticResource FieldError}" AutomationProperties.LiveSetting="Polite" />
                   </Grid>
                   <TextBlock x:Name="ConnectionError" Style="{StaticResource FieldError}" AutomationProperties.LiveSetting="Polite" />
-                  <Grid>
-                    <Button x:Name="ResetConnectionButton" Content="Reset connection" Click="ResetConnection_Click"
-                            HorizontalAlignment="Left" Visibility="Collapsed" />
-                    <Button x:Name="SaveConnectionButton" Content="Connect" Style="{StaticResource AccentButtonStyle}" Click="Connect_Click" HorizontalAlignment="Right" />
+                </StackPanel>
+                <Border BorderBrush="{ThemeResource SectionBorderBrush}" BorderThickness="0,1,0,0" Padding="0,10,0,0">
+                  <Grid ColumnSpacing="12">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                    <TextBlock x:Name="ConnectionDetail" Style="{StaticResource SupportingText}" VerticalAlignment="Center" />
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                      <HyperlinkButton x:Name="ResetConnectionButton" Content="Reset connection" Click="ResetConnection_Click"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" Visibility="Collapsed" />
+                      <Button x:Name="SaveConnectionButton" Content="Connect" Style="{StaticResource AccentButtonStyle}" Click="Connect_Click" />
+                    </StackPanel>
                   </Grid>
-                </StackPanel>
-                <StackPanel Spacing="4">
-                  <TextBlock x:Name="ConnectionDetail" Style="{StaticResource SupportingText}" />
-                </StackPanel>
+                </Border>
               </StackPanel>
             </Border>
             <StackPanel Spacing="8">
@@ -182,6 +185,23 @@
                   </views:SettingsRow>
                   <views:SettingsRow x:Name="StartupRow" Title="Start with Windows" Glyph="&#xE7E8;"
                                      ToggleChanged="Startup_Toggled" />
+                  <views:SettingsRow x:Name="SettingsTransferRow" Title="Settings file" Glyph="&#xEA35;" AlwaysStackValue="True">
+                    <views:SettingsRow.TrailingContent>
+                      <DropDownButton x:Name="TransferSettingsButton" Content="Transfer" Width="120"
+                                      AutomationProperties.Name="Transfer settings">
+                        <DropDownButton.Flyout>
+                          <MenuFlyout Placement="BottomEdgeAlignedRight">
+                            <MenuFlyoutItem x:Name="ImportSettingsItem" Text="Import settings…" Click="ImportSettings_Click">
+                              <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE8B5;" /></MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutItem x:Name="ExportSettingsItem" Text="Export settings…" Click="ExportSettings_Click">
+                              <MenuFlyoutItem.Icon><FontIcon Glyph="&#xEDE1;" /></MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                          </MenuFlyout>
+                        </DropDownButton.Flyout>
+                      </DropDownButton>
+                    </views:SettingsRow.TrailingContent>
+                  </views:SettingsRow>
                   <views:SettingsRow Title="Diagnostic logs" Glyph="&#xE8A5;">
                     <views:SettingsRow.TrailingContent><Button Content="Open folder" Width="120" Click="OpenLogs_Click" AutomationProperties.Name="Open diagnostic log folder" /></views:SettingsRow.TrailingContent>
                   </views:SettingsRow>
@@ -224,6 +244,7 @@
             <ComboBoxItem Content="Toggles" Tag="input_boolean" />
             <ComboBoxItem Content="Fans" Tag="fan" />
             <ComboBoxItem Content="Covers" Tag="cover" />
+            <ComboBoxItem Content="Media players" Tag="media_player" />
             <ComboBoxItem Content="Scripts" Tag="script" />
             <ComboBoxItem Content="Scenes" Tag="scene" />
             <ComboBoxItem Content="Buttons" Tag="button" />

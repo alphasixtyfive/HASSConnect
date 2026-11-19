@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Net;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using HassConnect.Core;
 using HassConnect.HomeAssistant;
@@ -15,6 +16,7 @@ internal sealed class SensorSession : IAsyncDisposable
     private readonly SettingsStore _store;
     private readonly DisplayStateMonitor _display;
     private readonly SemaphoreSlim _gate = new(1, 1);
+    private readonly SemaphoreSlim _quickActionGate = new(1, 1);
     private readonly SemaphoreSlim _publishRequested = new(0, 1);
     private readonly CancellationTokenSource _lifetime = new();
     private readonly Task _loop;
@@ -207,6 +209,28 @@ internal sealed class SensorSession : IAsyncDisposable
         finally { _gate.Release(); }
     }
 
+    public async Task ImportSettingsAsync(SettingsTransfer transfer)
+    {
+        await _gate.WaitAsync(_lifetime.Token);
+        try
+        {
+            var next = transfer.ApplyTo(_settings);
+            var changed = new HashSet<string>(_settings.EnabledSensors, StringComparer.Ordinal);
+            changed.SymmetricExceptWith(next.EnabledSensors);
+            if (next.ShareSensors != _settings.ShareSensors)
+                changed.UnionWith(AvailableSensors().Select(sensor => sensor.Id));
+            SaveSettings(next);
+            foreach (var id in changed)
+            {
+                _values.Remove(id);
+                ResetSensor(id);
+            }
+            _notifications.UpdateOptions(_settings);
+            RequestPublish();
+        }
+        finally { _gate.Release(); Changed?.Invoke(); }
+    }
+
     public async Task<IReadOnlyList<HomeAssistantDashboard>> GetDashboardsAsync(CancellationToken cancellationToken = default)
     {
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token, cancellationToken);
@@ -239,7 +263,7 @@ internal sealed class SensorSession : IAsyncDisposable
         return await client.GetQuickActionEntitiesAsync(linked.Token);
     }
 
-    public async Task<IReadOnlyDictionary<string, string>> GetQuickActionStatesAsync(
+    public async Task<IReadOnlyDictionary<string, QuickActionState>> GetQuickActionStatesAsync(
         IReadOnlyCollection<string> entityIds, CancellationToken cancellationToken = default)
     {
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token, cancellationToken);
@@ -248,13 +272,20 @@ internal sealed class SensorSession : IAsyncDisposable
         return await client.GetQuickActionStatesAsync(entityIds, linked.Token);
     }
 
-    public async Task InvokeQuickActionAsync(QuickActionDefinition action)
+    public async Task InvokeQuickActionAsync(QuickActionDefinition action, int? percentage)
     {
-        if (!Connected) throw new InvalidOperationException("Home Assistant is not connected.");
         var connection = QuickActionConnectionOrThrow();
-        // Keep tile actions independent of the sensor publishing lock and its network requests.
-        using var client = new HaClient(connection.Server, connection.AccessToken);
-        await client.InvokeQuickActionAsync(action, _lifetime.Token);
+        var ct = _lifetime.Token;
+        // Opening a second popup can enqueue a write before the previous one finishes.
+        await _quickActionGate.WaitAsync(ct);
+        try
+        {
+            if (!Connected || !ReferenceEquals(connection, Volatile.Read(ref _quickActionConnection)))
+                throw new InvalidOperationException("Home Assistant is not connected.");
+            using var client = new HaClient(connection.Server, connection.AccessToken);
+            await client.InvokeQuickActionAsync(action, ct, percentage);
+        }
+        finally { _quickActionGate.Release(); }
     }
 
     private QuickActionConnection QuickActionConnectionOrThrow() =>
@@ -512,11 +543,12 @@ internal sealed class SensorSession : IAsyncDisposable
         // Sample once per cycle, so registration and state updates use the same reading.
         if (plan.SensorsToRead.Any(sensor => NetworkSensors.Supports(sensor.Id)))
             await NetworkSensors.ConfigureTargetAsync(ServerAddress.Parse(_settings.ServerUrl).Host, ct);
-        var readings = plan.SensorsToRead.Select(sensor => ReadSensor(sensor.Id)).ToArray();
-        foreach (var sensor in plan.SensorsToRead.Where(sensor => plan.SensorsToRegister.Contains(sensor.Id)))
+        var readings = plan.SensorsToRead.Select(ReadSensor).ToArray();
+        for (var index = 0; index < readings.Length; index++)
         {
-            var reading = readings.Single(reading => reading.Id == sensor.Id);
-            await _client.RegisterSensorAsync(webhook, sensor, reading.Value, true, ct);
+            var sensor = plan.SensorsToRead[index];
+            if (plan.SensorsToRegister.Contains(sensor.Id))
+                await _client.RegisterSensorAsync(webhook, sensor, readings[index].Value, true, ct);
         }
         if (readings.Length > 0)
         {
@@ -535,8 +567,9 @@ internal sealed class SensorSession : IAsyncDisposable
         SetStatus(SessionState.Connected, plan.EnabledIds.Count == 0 ? "Choose which sensors this PC shares with Home Assistant." : "Enabled sensors report every 15 seconds.", true);
     }
 
-    private SensorReading ReadSensor(string id)
+    private SensorReading ReadSensor(SensorDefinition sensor)
     {
+        var id = sensor.Id;
         try
         {
             var reading = id switch
@@ -548,13 +581,13 @@ internal sealed class SensorSession : IAsyncDisposable
             _sensorErrors.Remove(id);
             return reading;
         }
-        catch (Exception ex) when (ex is Win32Exception or InvalidDataException)
+        catch (Exception ex) when (ex is Win32Exception or InvalidDataException or COMException)
         {
             // One unavailable Windows metric must not stop unrelated sensors or
             // make a healthy Home Assistant connection appear disconnected.
             if (_sensorErrors.Add(id)) AppLog.Write($"Read sensor {id}", ex);
             ResetSensor(id);
-            return new(id, AvailableSensors().Single(sensor => sensor.Id == id).Type == "binary_sensor" ? null : "unknown");
+            return new(id, sensor.Type == "binary_sensor" ? null : "unknown");
         }
     }
 
