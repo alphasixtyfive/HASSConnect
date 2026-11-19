@@ -14,7 +14,7 @@
         <RowDefinition Height="Auto" />
         <RowDefinition Height="Auto" />
       </Grid.RowDefinitions>
-      <FontIcon x:Name="GlyphIcon" FontSize="20" />
+      <IconSourceElement x:Name="TileIcon" Width="20" Height="20" />
       <TextBlock x:Name="LabelText" Grid.Column="1" FontSize="14" VerticalAlignment="Center"
                  TextTrimming="CharacterEllipsis" MaxLines="1" />
       <TextBlock x:Name="PercentageText" Grid.Column="2" VerticalAlignment="Center" FontSize="13"

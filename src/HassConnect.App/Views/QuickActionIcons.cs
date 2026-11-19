@@ -1,15 +1,30 @@
 using HassConnect.Core;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Markup;
+using Microsoft.UI.Xaml.Media;
 
 namespace HassConnect.App.Views;
 
-internal sealed record QuickIconChoice(string Id, string Name, string Glyph, string Category);
+public sealed record QuickIconChoice(string Id, string Name, string? Glyph, string Category, string? Path = null)
+{
+    public IconElement Icon => new IconSourceElement { IconSource = CreateSource(20), Width = 20, Height = 20 };
+    public override string ToString() => Name;
 
-internal static class QuickActionIcons
+    public IconSource CreateSource(double size)
+    {
+        if (Path is null) return QuickActionIcons.FontSource(Glyph!, size);
+        var geometry = (Geometry)XamlBindingHelper.ConvertValue(typeof(Geometry), $"F1 {Path}");
+        var scale = size / 24;
+        geometry.Transform = new ScaleTransform { ScaleX = scale, ScaleY = scale };
+        return new PathIconSource { Data = geometry };
+    }
+}
+
+internal static partial class QuickActionIcons
 {
     // Names and glyphs are from Microsoft's Segoe Fluent Icons catalog. The mdi: IDs
     // keep existing quick actions compatible with Home Assistant icon settings.
-    public static IReadOnlyList<QuickIconChoice> Choices { get; } = Array.AsReadOnly(new QuickIconChoice[]
-    {
+    public static IReadOnlyList<QuickIconChoice> Choices { get; } = Array.AsReadOnly<QuickIconChoice>([
         new("mdi:home", "Home", "\uE80F", "Home"),
         new("mdi:map-marker", "Location", "\uE707", "Home"),
         new("mdi:car", "Car", "\uE804", "Home"),
@@ -61,33 +76,48 @@ internal static class QuickActionIcons
         new("mdi:pin", "Pin", "\uE718", "Symbols"),
         new("mdi:file-document-outline", "Document", "\uE8A5", "Symbols"),
         new("mdi:refresh", "Refresh", "\uE72C", "Symbols"),
-        new("mdi:palette", "Color", "\uE790", "Symbols")
-    });
+        new("mdi:palette", "Color", "\uE790", "Symbols"),
+        .. MaterialDesignChoices()
+    ]);
 
-    private static readonly IReadOnlyDictionary<string, string> GlyphsById =
-        Choices.ToDictionary(choice => choice.Id, choice => choice.Glyph, StringComparer.Ordinal);
+    private static readonly IReadOnlyDictionary<string, QuickIconChoice> IconsById =
+        Choices.ToDictionary(choice => choice.Id, StringComparer.Ordinal);
 
-    public static string GlyphFor(string? icon, string entityId)
+    public static IconSource SourceFor(string? icon, string entityId, double size)
     {
         var selected = string.IsNullOrWhiteSpace(icon) ? QuickActionPolicy.DefaultIcon(entityId) : icon;
-        if (GlyphsById.TryGetValue(selected, out var glyph)) return glyph;
-        return selected switch
-        {
-            "mdi:button-pointer" => "\uE8B0",
-            "mdi:home-assistant" => "\uE80F",
-            "mdi:fan" => "\uE72C",
-            "mdi:blinds" or "mdi:door" or "mdi:door-open" => "\uE8A0",
-            "mdi:gate" or "mdi:gate-open" => "\uE90D",
-            "mdi:garage" or "mdi:garage-open" => "\uE804",
-            "mdi:music-note" => "\uE8D6",
-            "mdi:toggle-switch" or "mdi:toggle-switch-variant" => GlyphForDomain(entityId),
-            "mdi:check-circle-outline" => "\uE73A",
-            "mdi:script-text" => "\uE8A5",
-            _ => GlyphForDomain(entityId)
-        };
+        if (IconsById.TryGetValue(selected, out var choice)) return choice.CreateSource(size);
+        return FontSource(FallbackGlyph(selected, entityId), size);
     }
 
-    public static string GlyphForDomain(string entityId) => entityId.Split('.')[0] switch
+    internal static string EntityGlyphFor(string? icon, string entityId)
+    {
+        var selected = string.IsNullOrWhiteSpace(icon) ? QuickActionPolicy.DefaultIcon(entityId) : icon;
+        return IconsById.GetValueOrDefault(selected)?.Glyph ?? FallbackGlyph(selected, entityId);
+    }
+
+    private static string FallbackGlyph(string selected, string entityId) => selected switch
+    {
+        "mdi:button-pointer" => "\uE8B0",
+        "mdi:home-assistant" => "\uE80F",
+        "mdi:blinds" or "mdi:door" or "mdi:door-open" => "\uE8A0",
+        "mdi:gate" or "mdi:gate-open" => "\uE90D",
+        "mdi:garage" or "mdi:garage-open" => "\uE804",
+        "mdi:music-note" => "\uE8D6",
+        "mdi:toggle-switch" or "mdi:toggle-switch-variant" => GlyphForDomain(entityId),
+        "mdi:check-circle-outline" => "\uE73A",
+        "mdi:script-text" => "\uE8A5",
+        _ => GlyphForDomain(entityId)
+    };
+
+    internal static FontIconSource FontSource(string glyph, double size) => new()
+    {
+        Glyph = glyph,
+        FontSize = size,
+        FontFamily = new FontFamily("Segoe Fluent Icons")
+    };
+
+    private static string GlyphForDomain(string entityId) => entityId.Split('.')[0] switch
     {
         "light" => "\uEA80",
         "switch" => "\uE7E8",

@@ -39,8 +39,8 @@ public sealed partial class QuickActionIconPicker : UserControl
         var icon = string.IsNullOrEmpty(_selectedIcon) ? _automaticIcon : _selectedIcon;
         var choice = QuickActionIcons.Choices.FirstOrDefault(item => item.Id == _selectedIcon);
         var label = string.IsNullOrEmpty(_selectedIcon) ? "Automatic" : choice?.Name ?? "Current icon";
-        SelectedGlyph.Glyph = QuickActionIcons.GlyphFor(icon, _entityId);
-        AutomaticGlyph.Glyph = QuickActionIcons.GlyphFor(_automaticIcon, _entityId);
+        SelectedIconView.IconSource = QuickActionIcons.SourceFor(icon, _entityId, 16);
+        AutomaticIconView.IconSource = QuickActionIcons.SourceFor(_automaticIcon, _entityId, 20);
         AutomaticCheck.Visibility = string.IsNullOrEmpty(_selectedIcon) ? Visibility.Visible : Visibility.Collapsed;
         AutomationProperties.SetName(AutomaticButton, string.IsNullOrEmpty(_selectedIcon)
             ? "Automatic icon, selected" : "Automatic icon");

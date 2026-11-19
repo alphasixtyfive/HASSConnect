@@ -1,6 +1,7 @@
 <UserControl x:Class="HassConnect.App.Views.QuickActionIconPicker"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:HassConnect.App.Views">
   <StackPanel Spacing="4">
   <TextBlock Text="Icon" />
   <Button x:Name="PickerButton" Height="36" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
@@ -10,7 +11,7 @@
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="20" /><ColumnDefinition Width="*" /><ColumnDefinition Width="16" />
         </Grid.ColumnDefinitions>
-        <FontIcon x:Name="SelectedGlyph" FontSize="16" Width="20" />
+        <IconSourceElement x:Name="SelectedIconView" Width="16" Height="16" />
         <TextBlock x:Name="SelectedLabel" Grid.Column="1" Text="Automatic"
                    VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
         <FontIcon Grid.Column="2" Glyph="&#xE70D;" FontSize="12" />
@@ -39,7 +40,7 @@
             <Grid ColumnSpacing="8">
               <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="20" /></Grid.ColumnDefinitions>
               <StackPanel Orientation="Horizontal" Spacing="10">
-                <FontIcon x:Name="AutomaticGlyph" FontSize="20" Width="24" />
+                <IconSourceElement x:Name="AutomaticIconView" Width="20" Height="20" />
                 <StackPanel Spacing="1">
                   <TextBlock Text="Automatic" />
                   <TextBlock Text="Use the current entity icon" FontSize="12"
@@ -54,11 +55,11 @@
                     SelectionMode="Single" IsItemClickEnabled="True" ItemClick="IconGrid_ItemClick"
                     AutomationProperties.Name="Available icons">
             <GridView.ItemTemplate>
-              <DataTemplate>
+              <DataTemplate x:DataType="local:QuickIconChoice">
                 <StackPanel Width="62" Height="62" Spacing="3" VerticalAlignment="Center"
-                            ToolTipService.ToolTip="{Binding Name}">
-                  <FontIcon Glyph="{Binding Glyph}" FontSize="20" HorizontalAlignment="Center" />
-                  <TextBlock Text="{Binding Name}" FontSize="12" TextAlignment="Center"
+                            ToolTipService.ToolTip="{x:Bind Name}">
+                  <ContentPresenter Content="{x:Bind Icon}" HorizontalAlignment="Center" />
+                  <TextBlock Text="{x:Bind Name}" FontSize="12" TextAlignment="Center"
                              TextTrimming="CharacterEllipsis" MaxLines="1" />
                 </StackPanel>
               </DataTemplate>

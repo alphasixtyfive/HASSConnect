@@ -226,15 +226,13 @@
     </ContentDialog>
     <ContentDialog Grid.ColumnSpan="2" x:Name="QuickActionDialog" Title="Quick action">
       <StackPanel Spacing="12" MinWidth="420">
-        <TextBlock Text="Choose a Home Assistant entity for this tray shortcut."
-                   TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
         <Grid ColumnSpacing="8" RowSpacing="4">
           <Grid.ColumnDefinitions><ColumnDefinition Width="2*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
           <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
           <TextBlock Text="Entity" />
           <TextBlock Grid.Column="1" Text="Type" />
           <TextBox x:Name="QuickEntitySearch" Grid.Row="1" Height="36" PlaceholderText="Search name or ID"
-                   TextChanged="QuickEntitySearch_TextChanged" KeyDown="QuickEntitySearch_KeyDown"
+                   GotFocus="QuickEntitySearch_GotFocus" TextChanged="QuickEntitySearch_TextChanged" KeyDown="QuickEntitySearch_KeyDown"
                    AutomationProperties.Name="Search Home Assistant entities" />
           <ComboBox x:Name="QuickEntityTypeBox" Grid.Row="1" Grid.Column="1" Height="36" HorizontalAlignment="Stretch"
                     SelectionChanged="QuickEntityType_Changed" AutomationProperties.Name="Filter entity type">
@@ -250,7 +248,8 @@
             <ComboBoxItem Content="Buttons" Tag="button" />
           </ComboBox>
         </Grid>
-        <ListView x:Name="QuickEntityList" Height="208" SelectionMode="Single"
+        <ListView x:Name="QuickEntityList" MaxHeight="144" SelectionMode="Single" Visibility="Collapsed"
+                  ScrollViewer.VerticalScrollMode="Enabled" ScrollViewer.VerticalScrollBarVisibility="Auto"
                   SelectionChanged="QuickEntityList_SelectionChanged" AutomationProperties.Name="Matching entities">
           <ListView.ItemTemplate>
             <DataTemplate>
@@ -277,26 +276,33 @@
           <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="108" />
           </Grid.ColumnDefinitions>
-          <ComboBox x:Name="QuickActionOperationBox" Header="Action" HorizontalAlignment="Stretch"
-                    IsEnabled="False" PlaceholderText="Select an entity first"
-                    SelectionChanged="QuickActionOperation_Changed"
-                    AutomationProperties.Name="Action to perform" />
+          <StackPanel Spacing="4">
+            <TextBlock Text="Action" />
+            <ComboBox x:Name="QuickActionOperationBox" Height="36" HorizontalAlignment="Stretch"
+                      MinWidth="0" IsEnabled="False" PlaceholderText="Choose entity"
+                      SelectionChanged="QuickActionOperation_Changed" AutomationProperties.Name="Action to perform" />
+          </StackPanel>
           <views:QuickActionIconPicker x:Name="QuickActionIconPicker" Grid.Column="1" />
-          <ComboBox x:Name="QuickActionSizeBox" Grid.Column="2" Header="Tile size" HorizontalAlignment="Stretch"
-                    AutomationProperties.Name="Tile size"
-                    ToolTipService.ToolTip="Compact uses one column. Wide spans both columns.">
-            <ComboBoxItem Content="Auto" />
-            <ComboBoxItem Content="Compact" />
-            <ComboBoxItem Content="Wide" />
-          </ComboBox>
+          <StackPanel Grid.Column="2" Spacing="4">
+            <TextBlock Text="Tile size" />
+            <ComboBox x:Name="QuickActionSizeBox" Height="36" HorizontalAlignment="Stretch"
+                      AutomationProperties.Name="Tile size"
+                      ToolTipService.ToolTip="Compact uses one column. Wide spans both columns.">
+              <ComboBoxItem Content="Auto" />
+              <ComboBoxItem Content="Compact" />
+              <ComboBoxItem Content="Wide" />
+            </ComboBox>
+          </StackPanel>
         </Grid>
         <TextBlock x:Name="QuickActionError" Visibility="Collapsed" TextWrapping="Wrap"
                    Foreground="{ThemeResource SystemFillColorCriticalBrush}" AutomationProperties.LiveSetting="Assertive" />
-        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" Margin="0,4,0,0">
-          <Button x:Name="SaveQuickActionButton" Content="Add" Width="110" IsEnabled="False" Style="{StaticResource AccentButtonStyle}"
-                  Click="SaveQuickAction_Click" />
-          <Button Content="Cancel" Width="110" Click="CancelQuickAction_Click" />
-        </StackPanel>
+        <Border BorderBrush="{ThemeResource SectionBorderBrush}" BorderThickness="0,1,0,0" Padding="0,12,0,0" Margin="0,2,0,0">
+          <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+            <Button Content="Cancel" Width="88" Click="CancelQuickAction_Click" />
+            <Button x:Name="SaveQuickActionButton" Content="Add" Width="88" IsEnabled="False" Style="{StaticResource AccentButtonStyle}"
+                    Click="SaveQuickAction_Click" />
+          </StackPanel>
+        </Border>
       </StackPanel>
     </ContentDialog>
   </Grid>

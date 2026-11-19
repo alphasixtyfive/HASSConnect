@@ -1,3 +1,4 @@
+using HassConnect.Core;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
@@ -23,20 +24,19 @@ public sealed partial class QuickAccessLevelTile : UserControl
         };
     }
 
-    internal void SetLabel(string label, string glyph)
+    internal void SetAction(QuickActionDefinition action, bool compact)
     {
-        LabelText.Text = label;
-        GlyphIcon.Glyph = glyph;
-        ToolTipService.SetToolTip(LabelText, label);
-        AutomationProperties.SetName(LevelSlider, label);
-    }
+        LabelText.Text = action.Label;
+        var iconSize = compact ? 16 : 20;
+        TileIcon.Width = TileIcon.Height = iconSize;
+        TileIcon.IconSource = QuickActionIcons.SourceFor(action.Icon, action.EntityId, iconSize);
+        ToolTipService.SetToolTip(LabelText, action.Label);
+        AutomationProperties.SetName(LevelSlider, action.Label);
 
-    internal void UseCompactLayout()
-    {
+        if (!compact) return;
         TileBorder.Padding = new Thickness(8, 9, 8, 7);
         TileContent.ColumnSpacing = 5;
         IconColumn.Width = new GridLength(18);
-        GlyphIcon.FontSize = 16;
         LabelText.FontSize = 13;
         PercentageText.FontSize = 12;
     }

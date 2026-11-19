@@ -24,6 +24,8 @@
   <ItemGroup>
     <Content Update="Assets/app.ico" CopyToOutputDirectory="PreserveNewest" />
     <Content Update="Assets/hass-connect.png" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../LICENSES/MaterialDesignIcons.txt" Link="MaterialDesignIcons-LICENSE.txt"
+          CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
   <Target Name="PublishXamlResources" AfterTargets="ComputeFilesToPublish">
     <ItemGroup>

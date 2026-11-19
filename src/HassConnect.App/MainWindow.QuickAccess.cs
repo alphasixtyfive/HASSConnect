@@ -17,6 +17,7 @@ public sealed partial class MainWindow
     private string? _suggestedQuickLabel;
     private int? _editingQuickIndex;
     private bool _quickDialogOpen;
+    private bool _browseQuickEntities;
     private bool _quickSaving;
     private bool _quickShortcutSaving;
     private int _quickStateRequest;
@@ -178,9 +179,10 @@ public sealed partial class MainWindow
             _quickEntities = [];
             var existing = index is { } i ? _session.Settings.QuickActions[i] : null;
             _selectedQuickEntityId = existing?.EntityId;
+            _browseQuickEntities = existing is null;
             _suggestedQuickLabel = null;
             QuickActionDialog.XamlRoot = Root.XamlRoot;
-            QuickActionDialog.Title = existing is null ? "Add quick action" : "Edit quick action";
+            QuickActionDialog.Title = existing is null ? "Add tile" : "Edit tile";
             SaveQuickActionButton.Content = existing is null ? "Add" : "Save";
             QuickActionError.Visibility = Visibility.Collapsed;
             QuickEntityStatus.Text = "Loading entities…";
@@ -188,9 +190,10 @@ public sealed partial class MainWindow
             QuickEntitySearch.IsEnabled = QuickEntityTypeBox.IsEnabled = false;
             QuickActionLabelBox.Text = existing?.Label ?? "";
             QuickActionSizeBox.SelectedIndex = (int)(existing?.Size ?? QuickActionSize.Auto);
-            QuickEntitySearch.Text = existing?.EntityId ?? "";
+            QuickEntitySearch.Text = "";
             QuickEntityTypeBox.SelectedIndex = 0;
             QuickEntityList.ItemsSource = null;
+            QuickEntityList.Visibility = Visibility.Collapsed;
             QuickActionIconPicker.SelectIcon(existing?.Icon);
             QuickActionIconPicker.SetEntity(existing?.EntityId, null);
             SetQuickOperations(null, existing?.Operation);
@@ -235,12 +238,14 @@ public sealed partial class MainWindow
         var matches = new List<QuickEntityChoice>();
         foreach (var entity in _quickEntities)
         {
-            if (domain.Length > 0 && entity.Domain != domain ||
+            if (!_browseQuickEntities && entity.EntityId != _selectedQuickEntityId ||
+                domain.Length > 0 && entity.Domain != domain ||
                 search.Length > 0 && !entity.Name.Contains(search, StringComparison.OrdinalIgnoreCase) &&
                 !entity.EntityId.Contains(search, StringComparison.OrdinalIgnoreCase))
                 continue;
             matches.Add(entity);
         }
+        QuickEntityList.Visibility = matches.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
         QuickEntityList.ItemsSource = matches;
         QuickEntityList.SelectedItem = matches.FirstOrDefault(entity => entity.EntityId == _selectedQuickEntityId);
         if (QuickEntityList.SelectedItem is null && !preserveSelection)
@@ -251,18 +256,22 @@ public sealed partial class MainWindow
         }
         QuickEntityStatus.Visibility = matches.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         if (matches.Count == 0)
-            QuickEntityStatus.Text = _quickEntities.Length == 0
+            QuickEntityStatus.Text = !_browseQuickEntities ? $"Saved entity unavailable · {_selectedQuickEntityId}" : _quickEntities.Length == 0
                 ? "No supported entities found." : "No matches. Try another name or type.";
         return matches;
+    }
+
+    private void QuickEntitySearch_GotFocus(object sender, RoutedEventArgs args)
+    {
+        if (_browseQuickEntities || _quickEntities.Length == 0) return;
+        _browseQuickEntities = true;
+        FilterQuickEntities(preserveSelection: true);
     }
 
     private void QuickEntitySearch_TextChanged(object sender, TextChangedEventArgs args)
     {
         if (_quickEntities.Length == 0) return;
-        _selectedQuickEntityId = null;
-        QuickEntityList.SelectedItem = null;
-        QuickActionIconPicker.SetEntity(null, null);
-        SetQuickOperations(null, null);
+        _browseQuickEntities = true;
         _quickSearchTimer?.Stop();
         _quickSearchTimer?.Start();
     }
@@ -270,6 +279,7 @@ public sealed partial class MainWindow
     private void QuickEntityType_Changed(object sender, SelectionChangedEventArgs args)
     {
         if (_quickEntities.Length == 0) return;
+        _browseQuickEntities = true;
         _quickSearchTimer?.Stop();
         FilterQuickEntities();
     }
@@ -294,13 +304,15 @@ public sealed partial class MainWindow
             added.SeparatorOpacity = 0;
         if (QuickEntityList.SelectedItem is not QuickEntityChoice choice) return;
         var entity = choice.Entity;
+        var original = _editingQuickIndex is { } index ? _session?.Settings.QuickActions[index] : null;
+        var operation = _selectedQuickEntityId == entity.EntityId ? SelectedQuickOperation :
+            original?.EntityId == entity.EntityId ? original.Operation : null;
         if (string.IsNullOrWhiteSpace(QuickActionLabelBox.Text) || QuickActionLabelBox.Text == _suggestedQuickLabel)
             QuickActionLabelBox.Text = entity.Name;
         _selectedQuickEntityId = entity.EntityId;
         _suggestedQuickLabel = entity.Name;
         QuickActionIconPicker.SetEntity(entity.EntityId, entity.Icon);
-        var original = _editingQuickIndex is { } index ? _session?.Settings.QuickActions[index] : null;
-        SetQuickOperations(entity, original?.EntityId == entity.EntityId ? original.Operation : null);
+        SetQuickOperations(entity, operation);
     }
 
     private void SetQuickOperations(QuickActionEntity? entity, string? selected)
@@ -320,12 +332,14 @@ public sealed partial class MainWindow
             : QuickActionOperationBox.Items.Cast<ComboBoxItem>()
                 .FirstOrDefault(item => (string)item.Tag == selected);
         QuickActionOperationBox.PlaceholderText = entity is not null && QuickActionOperationBox.Items.Count == 0
-            ? "No supported actions" : selected is not null && QuickActionOperationBox.SelectedItem is null
-                ? "Choose a supported action" : "Select an entity first";
+            ? "No actions" : selected is not null && QuickActionOperationBox.SelectedItem is null
+                ? "Choose action" : "Choose entity";
         RefreshQuickActionSaveButton();
     }
 
     private void QuickActionOperation_Changed(object sender, SelectionChangedEventArgs args) => RefreshQuickActionSaveButton();
+
+    private string? SelectedQuickOperation => (QuickActionOperationBox.SelectedItem as ComboBoxItem)?.Tag as string;
 
     private void RefreshQuickActionSaveButton() => SaveQuickActionButton.IsEnabled = !_quickSaving &&
         _selectedQuickEntityId is not null && QuickActionOperationBox.SelectedItem is not null;
@@ -337,12 +351,11 @@ public sealed partial class MainWindow
         SaveQuickActionButton.IsEnabled = false;
         try
         {
-            var operation = (QuickActionOperationBox.SelectedItem as ComboBoxItem)?.Tag as string;
             var icon = QuickActionIconPicker.SelectedIcon;
             if (string.IsNullOrEmpty(icon))
                 icon = _quickEntities.FirstOrDefault(entity => entity.EntityId == _selectedQuickEntityId)?.Entity.Icon;
             var size = (QuickActionSize)QuickActionSizeBox.SelectedIndex;
-            var action = QuickActionPolicy.Create(_selectedQuickEntityId, QuickActionLabelBox.Text, icon, operation, size);
+            var action = QuickActionPolicy.Create(_selectedQuickEntityId, QuickActionLabelBox.Text, icon, SelectedQuickOperation, size);
             await _session.SaveQuickActionAsync(action, _editingQuickIndex);
             QuickActionDialog.Hide();
             Refresh();
@@ -368,7 +381,7 @@ public sealed class QuickEntityChoice : INotifyPropertyChanged
     public QuickEntityChoice(QuickActionEntity entity)
     {
         Entity = entity;
-        Glyph = QuickActionIcons.GlyphFor(entity.Icon, entity.EntityId);
+        Glyph = QuickActionIcons.EntityGlyphFor(entity.Icon, entity.EntityId);
         Name = entity.Name;
         EntityId = entity.EntityId;
         Domain = EntityId[..EntityId.IndexOf('.')];

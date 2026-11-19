@@ -29,11 +29,17 @@ public sealed partial class SettingsRow : UserControl
 
     public string Glyph
     {
-        get => RowIcon.Glyph;
+        get => (Icon as FontIconSource)?.Glyph ?? "";
+        set => Icon = string.IsNullOrEmpty(value) ? null : QuickActionIcons.FontSource(value, 18);
+    }
+
+    internal IconSource? Icon
+    {
+        get => RowIcon.IconSource;
         set
         {
-            RowIcon.Glyph = value;
-            RowIcon.Visibility = string.IsNullOrEmpty(value) ? Visibility.Collapsed : Visibility.Visible;
+            RowIcon.IconSource = value;
+            RowIcon.Visibility = value is null ? Visibility.Collapsed : Visibility.Visible;
         }
     }
 

@@ -8,9 +8,9 @@
             <ColumnDefinition Width="*" />
             <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
-        <FontIcon x:Name="RowIcon" Grid.Column="0" FontSize="18" Width="20"
-                  Margin="0,0,16,0" VerticalAlignment="Center" Visibility="Collapsed"
-                  Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+        <IconSourceElement x:Name="RowIcon" Grid.Column="0" Width="20" Height="18"
+                           Margin="0,0,16,0" VerticalAlignment="Center" Visibility="Collapsed"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
         <Grid Grid.Column="1" VerticalAlignment="Center" Margin="0,0,16,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />

@@ -137,7 +137,7 @@ public sealed partial class QuickAccessSettingsView : UserControl
             {
                 Title = action.Label,
                 ValueText = $"{QuickActionLabels.Operation(action.Operation)}{size} · {action.EntityId}",
-                Glyph = QuickActionIcons.GlyphFor(action.Icon, action.EntityId),
+                Icon = QuickActionIcons.SourceFor(action.Icon, action.EntityId, 18),
                 AlwaysStackValue = true,
                 TrailingContent = rowActions,
                 ShowDivider = index < _displayedActions.Length - 1

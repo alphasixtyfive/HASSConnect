@@ -180,7 +180,7 @@ internal sealed partial class QuickAccessWindow : Window
             Grid.SetRow(tile.Element, ActionsGrid.RowDefinitions.Count - 1);
             Grid.SetColumn(tile.Element, column);
             Grid.SetColumnSpan(tile.Element, span);
-            if (span == 1) tile.LevelTile?.UseCompactLayout();
+            tile.LevelTile?.SetAction(action, compact: span == 1);
             ActionsGrid.Children.Add(tile.Element);
             _tiles.Add(tile);
             column = (column + span) % columns;
@@ -193,7 +193,12 @@ internal sealed partial class QuickAccessWindow : Window
         content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(24) });
         content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-        var icon = new FontIcon { Glyph = QuickActionIcons.GlyphFor(action.Icon, action.EntityId), FontSize = 20 };
+        var icon = new IconSourceElement
+        {
+            IconSource = QuickActionIcons.SourceFor(action.Icon, action.EntityId, 20),
+            Width = 20,
+            Height = 20
+        };
         Grid.SetColumn(icon, 0);
         content.Children.Add(icon);
 
@@ -239,7 +244,6 @@ internal sealed partial class QuickAccessWindow : Window
     private ActionTile CreateLevelTile(QuickActionDefinition action)
     {
         var view = new QuickAccessLevelTile();
-        view.SetLabel(action.Label, QuickActionIcons.GlyphFor(action.Icon, action.EntityId));
         view.UpdateLevel(null, _isConnected ? "Loading…" : "Unavailable");
         var tile = new ActionTile(action, view, view.Input) { LevelTile = view };
         view.LevelChanged += level =>
@@ -386,7 +390,7 @@ internal sealed partial class QuickAccessWindow : Window
         public QuickActionDefinition Action { get; } = action;
         public FrameworkElement Element { get; } = element;
         public Control Input { get; } = input;
-        public FontIcon? Icon { get; init; }
+        public IconSourceElement? Icon { get; init; }
         public TextBlock? Status { get; init; }
         public QuickAccessLevelTile? LevelTile { get; init; }
         public int Row => Grid.GetRow(Element);
