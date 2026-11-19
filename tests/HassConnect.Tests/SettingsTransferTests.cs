@@ -23,7 +23,10 @@ public sealed class SettingsTransferTests
             PcControlEnabled = true,
             QuickAccessShortcut = new('Q', true, false, true),
             CustomCommands = [new("command_custom_example", "Example", @"C:\Example.exe", ["private-argument"])],
-            QuickActions = [QuickActionPolicy.Create("light.desk", "Desk brightness", "", QuickActionPolicy.Brightness)]
+            QuickActions =
+            [
+                QuickActionPolicy.Create("light.desk", "Desk brightness", "", QuickActionPolicy.Brightness, QuickActionSize.Wide)
+            ]
         };
         var bytes = SettingsTransfer.Export(source);
         var json = JsonNode.Parse(bytes)!.AsObject();

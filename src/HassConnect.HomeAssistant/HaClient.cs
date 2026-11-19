@@ -58,7 +58,7 @@ public sealed class HaClient : IDisposable
     {
         ArgumentNullException.ThrowIfNull(entityIds);
         if (entityIds.Count > QuickActionPolicy.MaximumActions || entityIds.Any(string.IsNullOrWhiteSpace))
-            throw new ArgumentException("Choose up to eight configured entities.", nameof(entityIds));
+            throw new ArgumentException($"Choose up to {QuickActionPolicy.MaximumActions} configured entities.", nameof(entityIds));
         var remaining = new HashSet<string>(entityIds, StringComparer.Ordinal);
         var states = new Dictionary<string, QuickActionState>(remaining.Count, StringComparer.Ordinal);
         if (remaining.Count == 0) return states;

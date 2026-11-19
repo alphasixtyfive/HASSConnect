@@ -135,14 +135,16 @@ the [PC command reference](docs/commands.md) and [custom-command guide](docs/cus
 
 ## Quick access
 
-Open **Quick access** in the app to add up to eight Home Assistant actions. Search by
+Open **Quick access** in the app to add up to 16 Home Assistant actions. Search by
 name or entity ID, choose an action and icon, then use the arrows to set the tray order.
 Lights, switches, fans and toggle helpers support toggle, on and off; scripts, scenes and
 buttons support run. Covers offer the actions supported by each device, including toggle
 when both open and close are available. Add a **Brightness slider** for a dimmable
 light or a **Volume slider** for a media player that supports absolute volume.
-Each slider spans the popup and displays its current percentage. Setting brightness to
-0% turns the light off.
+Tiles follow the order you set in Quick access. In **Auto**, buttons take one
+column and sliders span two. Choose **Compact** or **Wide** to set the width of
+any tile. Sliders show the current percentage. Setting brightness to 0% turns the
+light off.
 
 <img src="docs/images/quick-access-sliders.png" width="360" alt="Quick access with Hall lights, Blinds, a brightness slider and a volume slider">
 

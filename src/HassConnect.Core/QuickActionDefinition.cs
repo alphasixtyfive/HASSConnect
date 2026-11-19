@@ -1,9 +1,17 @@
 using System.Text;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
 namespace HassConnect.Core;
 
-public sealed record QuickActionDefinition(string EntityId, string Label, string Icon, string Operation);
+[JsonConverter(typeof(JsonStringEnumConverter<QuickActionSize>))]
+public enum QuickActionSize { Auto, Compact, Wide }
+
+public sealed record QuickActionDefinition(string EntityId, string Label, string Icon, string Operation)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public QuickActionSize Size { get; init; }
+}
 
 public sealed record QuickActionEntity(string EntityId, string Name, string Icon, string State,
     int? SupportedFeatures = null, bool SupportsBrightness = false)
@@ -19,6 +27,33 @@ public sealed record QuickActionState(string State, int? Brightness = null, int?
         QuickActionPolicy.Volume => Volume,
         _ => null
     };
+
+    public static QuickActionState? Predict(QuickActionDefinition action, QuickActionState? current, int? percentage)
+    {
+        var state = current?.State;
+        if (percentage is { } level)
+        {
+            return action.Operation switch
+            {
+                QuickActionPolicy.Brightness => new(level == 0 ? "off" : "on", Brightness: level),
+                QuickActionPolicy.Volume => new(state ?? "on", Volume: level),
+                _ => null
+            };
+        }
+
+        var next = action.Operation switch
+        {
+            QuickActionPolicy.Toggle when action.EntityId.StartsWith("cover.", StringComparison.Ordinal) =>
+                state switch { "closed" => "opening", "open" => "closing", _ => null },
+            QuickActionPolicy.Toggle => state switch { "on" => "off", "off" => "on", _ => null },
+            QuickActionPolicy.TurnOn => "on",
+            QuickActionPolicy.TurnOff => "off",
+            QuickActionPolicy.OpenCover => "opening",
+            QuickActionPolicy.CloseCover => "closing",
+            _ => null
+        };
+        return next is null ? null : new(next);
+    }
 }
 
 public static partial class QuickActionPolicy
@@ -29,7 +64,7 @@ public static partial class QuickActionPolicy
     private const int CoverStop = 8;
     private const int MediaPlayerVolumeSet = 4;
 
-    public const int MaximumActions = 8;
+    public const int MaximumActions = 16;
     public const string Toggle = "toggle";
     public const string TurnOn = "turn_on";
     public const string TurnOff = "turn_off";
@@ -49,7 +84,8 @@ public static partial class QuickActionPolicy
         Array.AsReadOnly([Toggle, OpenCover, CloseCover, StopCover]);
     private static readonly IReadOnlyList<string> NoOperations = Array.Empty<string>();
 
-    public static QuickActionDefinition Create(string? entityId, string? label, string? icon, string? operation)
+    public static QuickActionDefinition Create(string? entityId, string? label, string? icon, string? operation,
+        QuickActionSize size = QuickActionSize.Auto)
     {
         var id = entityId?.Trim() ?? "";
         var operations = AllowedOperations(id);
@@ -67,8 +103,10 @@ public static partial class QuickActionPolicy
         var selectedOperation = operation?.Trim() ?? "";
         if (!operations.Contains(selectedOperation, StringComparer.Ordinal))
             throw new ArgumentException("Choose an action supported by this entity.", nameof(operation));
+        if (!Enum.IsDefined(size))
+            throw new ArgumentException("Choose a supported tile size.", nameof(size));
 
-        return new(id, name, selectedIcon, selectedOperation);
+        return new(id, name, selectedIcon, selectedOperation) { Size = size };
     }
 
     public static IReadOnlyList<QuickActionDefinition> ValidateCollection(IEnumerable<QuickActionDefinition>? actions)
@@ -84,7 +122,7 @@ public static partial class QuickActionPolicy
             if (action is null)
                 throw new InvalidDataException("Quick action configuration contains an empty entry.");
             QuickActionDefinition validated;
-            try { validated = Create(action.EntityId, action.Label, action.Icon, action.Operation); }
+            try { validated = Create(action.EntityId, action.Label, action.Icon, action.Operation, action.Size); }
             catch (ArgumentException exception)
             {
                 throw new InvalidDataException($"Quick action configuration is invalid: {exception.Message}", exception);

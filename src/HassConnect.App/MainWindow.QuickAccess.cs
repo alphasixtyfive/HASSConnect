@@ -190,6 +190,7 @@ public sealed partial class MainWindow
             QuickEntityStatus.Visibility = Visibility.Visible;
             QuickEntitySearch.IsEnabled = true;
             QuickActionLabelBox.Text = existing?.Label ?? "";
+            QuickActionSizeBox.SelectedIndex = (int)(existing?.Size ?? QuickActionSize.Auto);
             QuickEntitySearch.Text = existing?.EntityId ?? "";
             QuickEntityTypeBox.SelectedIndex = 0;
             QuickEntityList.ItemsSource = null;
@@ -355,7 +356,8 @@ public sealed partial class MainWindow
             var icon = QuickActionIconPicker.SelectedIcon;
             if (string.IsNullOrEmpty(icon))
                 icon = _quickEntities.FirstOrDefault(entity => entity.EntityId == _selectedQuickEntityId)?.Entity.Icon;
-            var action = QuickActionPolicy.Create(_selectedQuickEntityId, QuickActionLabelBox.Text, icon, operation);
+            var size = (QuickActionSize)QuickActionSizeBox.SelectedIndex;
+            var action = QuickActionPolicy.Create(_selectedQuickEntityId, QuickActionLabelBox.Text, icon, operation, size);
             await _session.SaveQuickActionAsync(action, _editingQuickIndex);
             QuickActionDialog.Hide();
             Refresh();

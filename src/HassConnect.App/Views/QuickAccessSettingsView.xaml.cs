@@ -117,6 +117,7 @@ public sealed partial class QuickAccessSettingsView : UserControl
         {
             var action = _displayedActions[index];
             var rowIndex = index;
+            var size = action.Size == QuickActionSize.Auto ? "" : $" · {action.Size}";
             var rowActions = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
@@ -135,7 +136,7 @@ public sealed partial class QuickAccessSettingsView : UserControl
             var row = new SettingsRow
             {
                 Title = action.Label,
-                ValueText = $"{QuickActionLabels.Operation(action.Operation)} · {action.EntityId}",
+                ValueText = $"{QuickActionLabels.Operation(action.Operation)}{size} · {action.EntityId}",
                 Glyph = QuickActionIcons.GlyphFor(action.Icon, action.EntityId),
                 AlwaysStackValue = true,
                 TrailingContent = rowActions,

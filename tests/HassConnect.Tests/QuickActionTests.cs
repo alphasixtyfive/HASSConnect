@@ -53,15 +53,44 @@ public sealed class QuickActionTests
         Assert.Empty(QuickActionPolicy.AllowedOperations("cover.blinds", -1));
     }
 
+    [Theory]
+    [InlineData("light.desk", "brightness", "off", 65, "on", 65)]
+    [InlineData("light.desk", "brightness", "on", 0, "off", 0)]
+    [InlineData("media_player.study", "volume", "playing", 0, "playing", 0)]
+    [InlineData("media_player.study", "volume", "idle", 35, "idle", 35)]
+    [InlineData("cover.blinds", "toggle", "closed", null, "opening", null)]
+    public void PredictsStateForTheConfiguredAction(string entityId, string operation, string current,
+        int? requestedLevel, string expectedState, int? expectedLevel)
+    {
+        var action = QuickActionPolicy.Create(entityId, "Tile", "", operation);
+        var predicted = QuickActionState.Predict(action, new(current), requestedLevel);
+
+        Assert.NotNull(predicted);
+        Assert.Equal(expectedState, predicted.State);
+        Assert.Equal(expectedLevel, predicted.LevelFor(operation));
+    }
+
     [Fact]
     public void RejectsTooManyAndDuplicateActions()
     {
         var action = QuickActionPolicy.Create("light.desk", "Desk", "", QuickActionPolicy.Toggle);
         Assert.Throws<InvalidDataException>(() => QuickActionPolicy.ValidateCollection([action, action]));
-        Assert.Throws<InvalidDataException>(() => QuickActionPolicy.ValidateCollection(
-            Enumerable.Range(0, 9).Select(i => action with { EntityId = $"light.room_{i}" })));
+        var actions = Enumerable.Range(0, QuickActionPolicy.MaximumActions)
+            .Select(i => action with { EntityId = $"light.room_{i}" }).ToArray();
+        Assert.Equal(actions, QuickActionPolicy.ValidateCollection(actions));
+        Assert.Throws<InvalidDataException>(() => QuickActionPolicy.ValidateCollection([.. actions, action]));
         Assert.Equal(2, QuickActionPolicy.ValidateCollection(
             [action, action with { Operation = QuickActionPolicy.TurnOff }]).Count);
+    }
+
+    [Fact]
+    public void ValidatesTileSizeIndependentlyOfItsAction()
+    {
+        var button = QuickActionPolicy.Create("light.desk", "Desk", "", QuickActionPolicy.Toggle, QuickActionSize.Wide);
+        var slider = QuickActionPolicy.Create("media_player.study", "Study volume", "", QuickActionPolicy.Volume,
+            QuickActionSize.Compact);
+        Assert.Equal([button, slider], QuickActionPolicy.ValidateCollection([button, slider]));
+        Assert.Throws<InvalidDataException>(() => QuickActionPolicy.ValidateCollection([button with { Size = (QuickActionSize)99 }]));
     }
 
     [Fact]
@@ -175,7 +204,8 @@ public sealed class QuickActionTests
 
         Assert.Empty(await client.GetQuickActionStatesAsync([], CancellationToken.None));
         await Assert.ThrowsAsync<ArgumentException>(() => client.GetQuickActionStatesAsync(
-            Enumerable.Range(0, 9).Select(i => $"light.room_{i}").ToArray(), CancellationToken.None));
+            Enumerable.Range(0, QuickActionPolicy.MaximumActions + 1).Select(i => $"light.room_{i}").ToArray(),
+            CancellationToken.None));
     }
 
     [Fact]

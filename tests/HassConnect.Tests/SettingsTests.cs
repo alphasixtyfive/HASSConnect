@@ -38,12 +38,14 @@ public sealed class SettingsTests
     public void QuickActionOrderSurvivesReload()
     {
         var first = QuickActionPolicy.Create("light.desk", "Desk", "", QuickActionPolicy.Toggle);
+        var volume = QuickActionPolicy.Create("media_player.study", "Study volume", "", QuickActionPolicy.Volume,
+            QuickActionSize.Compact);
         var second = QuickActionPolicy.Create("scene.evening", "Evening", "mdi:star", QuickActionPolicy.Run);
-        var settings = new Settings { QuickActions = [second, first] };
+        var settings = new Settings { QuickActions = [second, volume, first] };
 
         var restored = JsonSerializer.Deserialize<Settings>(JsonSerializer.Serialize(settings))!;
 
-        Assert.Equal([second, first], restored.QuickActions);
+        Assert.Equal([second, volume, first], restored.QuickActions);
     }
 
     [Fact]

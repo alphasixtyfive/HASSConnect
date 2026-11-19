@@ -159,21 +159,31 @@ internal sealed partial class QuickAccessWindow : Window
             : "Connect to Home Assistant to add actions.";
         EmptyActionButton.Content = isConnected ? "Add an action" : "Open settings";
 
+        var columns = ActionsGrid.ColumnDefinitions.Count;
         var column = 0;
         foreach (var action in actions.Take(count))
         {
-            var level = QuickActionPolicy.IsLevel(action.Operation);
-            if (level) column = 0;
-            if (column == 0)
+            var tile = QuickActionPolicy.IsLevel(action.Operation)
+                ? CreateLevelTile(action) : CreateActionButton(action, isConnected);
+            var span = action.Size switch
+            {
+                QuickActionSize.Compact => 1,
+                QuickActionSize.Wide => columns,
+                _ => tile.LevelTile is null ? 1 : columns
+            };
+            if (column == 0 || column + span > columns)
+            {
                 ActionsGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                column = 0;
+            }
 
-            var tile = level ? CreateLevelTile(action) : CreateActionButton(action, isConnected);
             Grid.SetRow(tile.Element, ActionsGrid.RowDefinitions.Count - 1);
             Grid.SetColumn(tile.Element, column);
-            if (level) Grid.SetColumnSpan(tile.Element, 2);
+            Grid.SetColumnSpan(tile.Element, span);
+            if (span == 1) tile.LevelTile?.UseCompactLayout();
             ActionsGrid.Children.Add(tile.Element);
             _tiles.Add(tile);
-            if (!level) column = 1 - column;
+            column = (column + span) % columns;
         }
     }
 
@@ -209,15 +219,16 @@ internal sealed partial class QuickAccessWindow : Window
         var button = new Button
         {
             Content = content,
-            Height = 64,
+            MinHeight = 64,
             HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch,
             HorizontalContentAlignment = HorizontalAlignment.Stretch,
             Padding = new Thickness(10, 8, 10, 8),
             IsEnabled = isConnected
         };
         var tile = new ActionTile(action, button, button) { Icon = icon, Status = status };
         UpdateTile(tile, null);
-        if (isConnected && action.EntityId.Split('.')[0] is not ("script" or "scene" or "button"))
+        if (isConnected && action.Operation != QuickActionPolicy.Run)
             status.Text = "Loading…";
         button.Click += (_, _) => RequestAction(tile, null);
         button.AddHandler(UIElement.KeyDownEvent,
@@ -228,10 +239,7 @@ internal sealed partial class QuickAccessWindow : Window
     private ActionTile CreateLevelTile(QuickActionDefinition action)
     {
         var view = new QuickAccessLevelTile();
-        var glyph = action.Operation == QuickActionPolicy.Brightness && action.Icon == QuickActionPolicy.DefaultIcon(action.EntityId)
-            ? QuickActionIcons.GlyphFor("mdi:brightness-6", action.EntityId)
-            : QuickActionIcons.GlyphFor(action.Icon, action.EntityId);
-        view.SetLabel(action.Label, glyph);
+        view.SetLabel(action.Label, QuickActionIcons.GlyphFor(action.Icon, action.EntityId));
         view.UpdateLevel(null, _isConnected ? "Loading…" : "Unavailable");
         var tile = new ActionTile(action, view, view.Input) { LevelTile = view };
         view.LevelChanged += level =>
@@ -275,13 +283,7 @@ internal sealed partial class QuickAccessWindow : Window
         if (_pendingAction is not null) return;
         _pendingAction = tile;
         tile.PreviousState = tile.State;
-        var predicted = level is { } percentage
-            ? tile.Action.Operation == QuickActionPolicy.Brightness
-                ? new QuickActionState(percentage == 0 ? "off" : "on", Brightness: percentage)
-                : new QuickActionState(tile.State?.State ?? "on", Volume: percentage)
-            : PredictState(tile.Action.Operation, tile.Action.EntityId, tile.State?.State) is { } state
-                ? new QuickActionState(state) : null;
-        if (predicted is not null)
+        if (QuickActionState.Predict(tile.Action, tile.State, level) is { } predicted)
         {
             UpdateTile(tile, predicted);
             tile.IsOptimistic = true;
@@ -362,24 +364,9 @@ internal sealed partial class QuickAccessWindow : Window
             return;
         }
 
-        var state = reading?.State;
-        var domain = tile.Action.EntityId.Split('.')[0];
-        var status = domain switch
-        {
-            "script" or "scene" or "button" => "Run",
-            _ when state is null => "Status unavailable",
-            "cover" => state switch
-            {
-                "open" => "Open", "closed" => "Closed", "opening" => "Opening", "closing" => "Closing",
-                "unavailable" => "Unavailable", _ => "Unknown"
-            },
-            _ => state switch
-            {
-                "on" => "On", "off" => "Off", "unavailable" => "Unavailable", _ => "Unknown"
-            }
-        };
+        var status = QuickActionLabels.Status(tile.Action, reading);
         tile.Status!.Text = status;
-        tile.Icon!.Foreground = state is "on" or "open" or "opening" ? AccentBrush : PrimaryBrush;
+        tile.Icon!.Foreground = reading?.State is "on" or "open" or "opening" ? AccentBrush : PrimaryBrush;
         var description = $"{QuickActionLabels.Operation(tile.Action.Operation)} {tile.Action.Label}. {status}.";
         AutomationProperties.SetName(tile.Input, description);
         ToolTipService.SetToolTip(tile.Input, $"{description} {tile.Action.EntityId}");
@@ -410,18 +397,6 @@ internal sealed partial class QuickAccessWindow : Window
         public int? PendingLevel { get; set; }
         public bool PointerDown { get; set; }
     }
-
-    private static string? PredictState(string operation, string entityId, string? current) => operation switch
-    {
-        QuickActionPolicy.Toggle when entityId.StartsWith("cover.", StringComparison.Ordinal) =>
-            current switch { "closed" => "opening", "open" => "closing", _ => null },
-        QuickActionPolicy.Toggle => current switch { "on" => "off", "off" => "on", _ => null },
-        QuickActionPolicy.TurnOn => "on",
-        QuickActionPolicy.TurnOff => "off",
-        QuickActionPolicy.OpenCover => "opening",
-        QuickActionPolicy.CloseCover => "closing",
-        _ => null
-    };
 
     private void SetActionsEnabled(bool enabled)
     {
@@ -472,7 +447,7 @@ internal sealed partial class QuickAccessWindow : Window
             ? dpi / 96d
             : GetDpiForWindow(_windowHandle) / 96d;
         var rows = ActionsGrid.RowDefinitions.Count;
-        var levelRows = _tiles.Count(tile => tile.LevelTile is not null);
+        var levelRows = _tiles.Where(tile => tile.LevelTile is not null).Select(tile => tile.Row).Distinct().Count();
         var contentHeight = levelRows == 0 ? 112 + rows * 72 : 96 + (rows - levelRows) * 72 + levelRows * 78;
         var desiredHeight = (rows == 0 ? 210 : contentHeight) + (hasMessage ? 26 : 0);
         var width = Math.Min((int)Math.Ceiling(WindowWidth * scale), work.Right - work.Left - EdgeGap * 2);

@@ -31,6 +31,16 @@ public sealed partial class QuickAccessLevelTile : UserControl
         AutomationProperties.SetName(LevelSlider, label);
     }
 
+    internal void UseCompactLayout()
+    {
+        TileBorder.Padding = new Thickness(8, 9, 8, 7);
+        TileContent.ColumnSpacing = 5;
+        IconColumn.Width = new GridLength(18);
+        GlyphIcon.FontSize = 16;
+        LabelText.FontSize = 13;
+        PercentageText.FontSize = 12;
+    }
+
     internal void UpdateLevel(int? level, string missingText)
     {
         _updatingLevel = true;

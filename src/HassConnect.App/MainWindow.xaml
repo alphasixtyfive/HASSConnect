@@ -274,11 +274,20 @@
                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" AutomationProperties.LiveSetting="Polite" />
         <TextBox x:Name="QuickActionLabelBox" Header="Label" MaxLength="40" PlaceholderText="e.g. Desk light" />
         <Grid ColumnSpacing="12">
-          <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="108" />
+          </Grid.ColumnDefinitions>
           <ComboBox x:Name="QuickActionOperationBox" Header="Action" HorizontalAlignment="Stretch"
                     IsEnabled="False" PlaceholderText="Select an entity first"
                     AutomationProperties.Name="Action to perform" />
           <views:QuickActionIconPicker x:Name="QuickActionIconPicker" Grid.Column="1" />
+          <ComboBox x:Name="QuickActionSizeBox" Grid.Column="2" Header="Tile size" HorizontalAlignment="Stretch"
+                    AutomationProperties.Name="Tile size"
+                    ToolTipService.ToolTip="Compact uses one column. Wide spans both columns.">
+            <ComboBoxItem Content="Auto" />
+            <ComboBoxItem Content="Compact" />
+            <ComboBoxItem Content="Wide" />
+          </ComboBox>
         </Grid>
         <TextBlock x:Name="QuickActionError" Visibility="Collapsed" TextWrapping="Wrap"
                    Foreground="{ThemeResource SystemFillColorCriticalBrush}" AutomationProperties.LiveSetting="Assertive" />
