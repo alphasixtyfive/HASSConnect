@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using HassConnect.Core;
@@ -62,6 +63,43 @@ public sealed class HaClientTests
         });
         using var client = new HaClient(new Uri("https://ha.example/"), "test-only", handler);
         await client.WebhookAsync("test-webhook", "get_config", new { }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task DefaultClientsReuseTheConnectionWithoutSharingCredentialsOrCookies()
+    {
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var server = new Uri($"http://{listener.LocalEndpoint}/");
+        await Task.WhenAll(ServeRequestsAsync(), SendRequestsAsync());
+
+        async Task SendRequestsAsync()
+        {
+            using (var first = new HaClient(server, "first-token"))
+                await first.ValidateAsync(timeout.Token);
+            using var second = new HaClient(server, "second-token");
+            await second.ValidateAsync(timeout.Token);
+        }
+
+        async Task ServeRequestsAsync()
+        {
+            using var connection = await listener.AcceptTcpClientAsync(timeout.Token);
+            await using var stream = connection.GetStream();
+            using var reader = new StreamReader(stream, Encoding.ASCII, leaveOpen: true);
+            const string body = "{\"components\":[\"mobile_app\"]}";
+            var response = Encoding.ASCII.GetBytes($"HTTP/1.1 200 OK\r\nContent-Length: {body.Length}\r\n" +
+                $"Set-Cookie: session=test; Path=/\r\n\r\n{body}");
+            foreach (var token in new[] { "first-token", "second-token" })
+            {
+                Assert.Equal("GET /api/config HTTP/1.1", await reader.ReadLineAsync(timeout.Token));
+                var headers = new List<string>();
+                while (await reader.ReadLineAsync(timeout.Token) is { Length: > 0 } header) headers.Add(header);
+                Assert.Contains($"Authorization: Bearer {token}", headers);
+                Assert.DoesNotContain(headers, header => header.StartsWith("Cookie:", StringComparison.OrdinalIgnoreCase));
+                await stream.WriteAsync(response, timeout.Token);
+            }
+        }
     }
 
     [Fact]

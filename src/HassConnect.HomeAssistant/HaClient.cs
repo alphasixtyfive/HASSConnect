@@ -9,6 +9,12 @@ namespace HassConnect.HomeAssistant;
 
 public sealed class HaClient : IDisposable
 {
+    private static readonly SocketsHttpHandler SharedTransport = new()
+    {
+        AllowAutoRedirect = false,
+        UseCookies = false,
+        PooledConnectionLifetime = TimeSpan.FromMinutes(5)
+    };
     private readonly HttpClient _http;
     private readonly string _token;
     private static readonly JsonSerializerOptions WebhookJson = new(JsonSerializerDefaults.Web)
@@ -21,7 +27,7 @@ public sealed class HaClient : IDisposable
         if (string.IsNullOrWhiteSpace(token) || token.Any(c => char.IsWhiteSpace(c) || char.IsControl(c)))
             throw new ArgumentException("Paste the complete access token without spaces or line breaks.", nameof(token));
         _token = token;
-        _http = new(handler ?? new HttpClientHandler { AllowAutoRedirect = false })
+        _http = new(handler ?? SharedTransport, disposeHandler: handler is not null)
         {
             BaseAddress = server,
             Timeout = TimeSpan.FromSeconds(20)

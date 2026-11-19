@@ -279,6 +279,7 @@
           </Grid.ColumnDefinitions>
           <ComboBox x:Name="QuickActionOperationBox" Header="Action" HorizontalAlignment="Stretch"
                     IsEnabled="False" PlaceholderText="Select an entity first"
+                    SelectionChanged="QuickActionOperation_Changed"
                     AutomationProperties.Name="Action to perform" />
           <views:QuickActionIconPicker x:Name="QuickActionIconPicker" Grid.Column="1" />
           <ComboBox x:Name="QuickActionSizeBox" Grid.Column="2" Header="Tile size" HorizontalAlignment="Stretch"

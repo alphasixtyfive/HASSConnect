@@ -11,7 +11,6 @@ public sealed partial class SensorSettingsView : UserControl
     private readonly Dictionary<string, SettingsRow> _rows = [];
     private readonly Dictionary<string, RowSpec> _rowSpecs = [];
     private HashSet<string> _supported = [];
-    private IReadOnlyList<string> _rowSignature = [];
     private readonly HashSet<string> _busy = [];
     private bool _masterBusy;
     private bool _sharingEnabled;
@@ -29,9 +28,8 @@ public sealed partial class SensorSettingsView : UserControl
     public void Update(Settings settings, IReadOnlyDictionary<string, object?> values)
     {
         var available = WindowsSensors.AvailableFor(settings);
-        _supported = available.Select(sensor => sensor.Id).ToHashSet(StringComparer.Ordinal);
-        var specs = BuildRowSpecs(available);
-        if (!_rowSignature.SequenceEqual(specs.Select(spec => spec.Key))) RebuildRows(available);
+        if (available.Count != _supported.Count || available.Any(sensor => !_supported.Contains(sensor.Id)))
+            RebuildRows(available);
 
         _sharingEnabled = settings.ShareSensors;
         if (!_masterBusy) MasterRow.IsOn = _sharingEnabled;
@@ -70,11 +68,11 @@ public sealed partial class SensorSettingsView : UserControl
 
     private void RebuildRows(IReadOnlyList<SensorDefinition> available)
     {
+        _supported = available.Select(sensor => sensor.Id).ToHashSet(StringComparer.Ordinal);
         SensorGroups.Children.Clear();
         _rows.Clear();
         _rowSpecs.Clear();
         var specs = BuildRowSpecs(available);
-        _rowSignature = specs.Select(spec => spec.Key).ToArray();
 
         foreach (var group in specs.GroupBy(spec => spec.Group))
         {
