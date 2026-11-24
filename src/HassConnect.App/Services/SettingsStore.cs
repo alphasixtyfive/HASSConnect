@@ -26,10 +26,10 @@ internal sealed class SettingsStore(string? directory = null)
         catch (Exception ex) when (ex is JsonException or InvalidDataException or FileNotFoundException)
         {
             var recovered = ReadSettings(path + ".bak");
-            // A backup may predate a command being disabled. Require fresh opt-in.
+            // A backup may predate a remote action being disabled. Require fresh opt-in.
             recovered = recovered with
             {
-                PcControlEnabled = false, EnabledPcCommands = [],
+                PcControlEnabled = false, CameraPopupsEnabled = false, EnabledPcCommands = [],
                 CustomCommands = recovered.CustomCommands.Select(command => command with { Enabled = false }).ToArray()
             };
             Preserve(path);
@@ -98,7 +98,6 @@ internal sealed class SettingsStore(string? directory = null)
             RecoveryMessage = "Enter your access token to finish reconnecting.";
             return;
         }
-        CheckExistingVersion();
         SaveSettings(pending.Settings);
         if (pending.Credentials is null) File.Delete(Path.Combine(_directory, "connection.dat"));
         else WriteProtected("connection.dat", pending.Credentials);
@@ -109,38 +108,25 @@ internal sealed class SettingsStore(string? directory = null)
     private void SaveSettings(Settings settings)
     {
         settings = Validate(settings);
-        CheckExistingVersion();
         var path = Path.Combine(_directory, "settings.json");
         if (File.Exists(path))
         {
             try
             {
-                ReadSettings(path);
-                WriteAtomic("settings.json.bak", File.ReadAllBytes(path));
+                var saved = File.ReadAllBytes(path);
+                ParseSettings(saved);
+                WriteAtomic("settings.json.bak", saved);
             }
             catch (Exception ex) when (ex is JsonException or InvalidDataException) { Preserve(path); }
         }
         WriteAtomic("settings.json", JsonSerializer.SerializeToUtf8Bytes(settings, Json));
     }
 
-    private void CheckExistingVersion()
-    {
-        var path = Path.Combine(_directory, "settings.json");
-        if (!File.Exists(path)) return;
-        try
-        {
-            using var document = JsonDocument.Parse(File.ReadAllBytes(path));
-            if (document.RootElement.ValueKind == JsonValueKind.Object &&
-                document.RootElement.TryGetProperty(nameof(Settings.SchemaVersion), out var schema) &&
-                schema.ValueKind == JsonValueKind.Number && schema.TryGetInt32(out var version) && version != 1)
-                throw new UnsupportedSettingsVersionException();
-        }
-        catch (JsonException) { }
-    }
+    private static Settings ReadSettings(string path) => ParseSettings(File.ReadAllBytes(path));
 
-    private static Settings ReadSettings(string path)
+    private static Settings ParseSettings(byte[] saved)
     {
-        using var document = JsonDocument.Parse(File.ReadAllBytes(path));
+        using var document = JsonDocument.Parse(saved);
         if (document.RootElement.ValueKind == JsonValueKind.Object &&
             document.RootElement.TryGetProperty(nameof(Settings.SchemaVersion), out var schema) &&
             schema.ValueKind == JsonValueKind.Number && schema.TryGetInt32(out var version) && version != 1)

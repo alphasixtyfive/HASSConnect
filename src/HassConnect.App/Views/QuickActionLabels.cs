@@ -5,7 +5,7 @@ namespace HassConnect.App.Views;
 internal static class QuickActionLabels
 {
     public static string Status(QuickActionDefinition action, QuickActionState? reading) =>
-        action.Operation == QuickActionPolicy.Run ? "Run" : reading?.State switch
+        action.Operation is QuickActionPolicy.Run or QuickActionPolicy.ViewCamera ? Operation(action.Operation) : reading?.State switch
         {
             null => "Status unavailable",
             "on" => "On",
@@ -29,6 +29,7 @@ internal static class QuickActionLabels
         QuickActionPolicy.StopCover => "Stop",
         QuickActionPolicy.Brightness => "Brightness slider",
         QuickActionPolicy.Volume => "Volume slider",
+        QuickActionPolicy.ViewCamera => "View live",
         _ => operation
     };
 }

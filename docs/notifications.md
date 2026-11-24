@@ -6,6 +6,12 @@ Enable notifications on the Notifications page. HASS Connect receives messages o
 
 The app must remain running, including in the tray, with the PC awake and connected. Messages are not queued while offline. Windows notification settings and Do not disturb control whether a banner or sound appears. The **Send test** button checks local Windows delivery; sending from Home Assistant checks the full connection.
 
+Turn on **Only show while active** to pause incoming alerts and automatic
+camera popups when Windows is locked, the display is off, or five minutes have
+passed since your last input. The check runs on the PC. Home Assistant automations
+can use the shared **Session locked**, **Display state**, and **Idle time** sensors
+to decide whether to send an alert in the first place.
+
 The connection recovers automatically if Home Assistant is unavailable at startup or
 temporarily disconnects. A rejected access token requires an update in Settings.
 
@@ -86,6 +92,51 @@ server. Clicking anywhere on the notification body, including its image, opens t
 page in the default browser. Custom application protocols and URLs containing
 embedded credentials are rejected. Body links and action buttons run once and
 expire after 24 hours or when the app restarts.
+
+## Live camera notifications
+
+Send `camera_entity_id` to add a **View live** button. Clicking the notification
+also opens the native viewer unless the payload specifies a `url`. For an
+automatic popup, enable **Allow automatic camera popups** in HASS Connect’s
+Notifications settings and send `camera_popup: true`:
+
+```yaml
+action: notify.mobile_app_desktop
+data:
+  title: Front door
+  message: Someone rang the bell.
+  data:
+    tag: doorbell-front-door
+    image: /local/front-door.jpg
+    camera_entity_id: camera.front_door
+    camera_popup: true
+```
+
+`image` is the optional still image. The viewer can show it while opening the
+stream. `camera_entity_id` selects the live camera from the PC’s connected Home
+Assistant instance. Without `camera_popup: true`, or with automatic popups off on
+the PC, the message appears as a Windows notification with **View live** and up
+to two additional buttons. A Home Assistant dashboard button can call the same
+notify action to open the camera on the selected PC.
+
+To open a camera from the tray without a notification, add a camera tile under
+**Quick access** and choose **View live**. Opening another camera uses the same
+window. Closing it stops the stream.
+
+To add a button to a camera, edit its tile in **Quick access** and go to
+**Camera actions**. Choose **Add action**, select a Home Assistant entity, and
+choose what it does.
+For example, select a gate cover and choose **Open**. The button appears on
+that camera from either launch path.
+Multiple buttons appear in the **Actions** menu. Cover commands ask for
+confirmation before sending.
+
+The camera popup starts with sound on and the microphone muted. Use the speaker
+icon to mute camera sound or the microphone icon to start talking. Switching cameras,
+reconnecting, or closing the popup mutes the microphone. For low-latency voice, the
+local go2rtc stream name must match the camera entity’s name after `camera.` and
+offer PCMU on RTSP port 8554. When go2rtc playback is unavailable, the viewer
+uses audio from the HLS feed if present. HLS video can lag behind go2rtc audio.
 
 The app supports up to three action buttons. PNG, JPEG and GIF images are limited
 to 5 MB and a five-second download timeout. Redirects are not followed. Image

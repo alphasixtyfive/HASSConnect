@@ -11,7 +11,9 @@ internal sealed class DisplayStateMonitor : IDisposable
     private readonly nint _window;
     private readonly SubclassProc _callback;
     private nint _registration;
-    private string _state = "unknown";
+    private volatile string _state = "unknown";
+
+    public string State => _state;
 
     public DisplayStateMonitor(nint window)
     {
@@ -23,13 +25,18 @@ internal sealed class DisplayStateMonitor : IDisposable
 
     public string Read()
     {
+        Start();
+        return State;
+    }
+
+    public void Start()
+    {
         if (_registration == 0)
         {
             var setting = DisplaySetting;
             _registration = RegisterPowerSettingNotification(_window, ref setting, 0);
             if (_registration == 0) throw new Win32Exception(Marshal.GetLastWin32Error());
         }
-        return _state;
     }
 
     public void Reset()

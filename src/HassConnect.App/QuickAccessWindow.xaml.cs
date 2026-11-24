@@ -233,7 +233,7 @@ internal sealed partial class QuickAccessWindow : Window
         };
         var tile = new ActionTile(action, button, button) { Icon = icon, Status = status };
         UpdateTile(tile, null);
-        if (isConnected && action.Operation != QuickActionPolicy.Run)
+        if (isConnected && action.Operation is not (QuickActionPolicy.Run or QuickActionPolicy.ViewCamera))
             status.Text = "Loading…";
         button.Click += (_, _) => RequestAction(tile, null);
         button.AddHandler(UIElement.KeyDownEvent,

@@ -14,6 +14,8 @@ public sealed partial class NotificationSettingsView : UserControl
 
     public event Action<bool>? EnabledChanged;
     public event Action<bool>? SoundChanged;
+    public event Action<bool>? ActiveOnlyChanged;
+    public event Action<bool>? CameraPopupChanged;
     public event Action? TestRequested;
 
     public NotificationSettingsView()
@@ -30,6 +32,8 @@ public sealed partial class NotificationSettingsView : UserControl
         {
             MasterRow.IsOn = settings.NotificationsEnabled;
             SoundRow.IsOn = settings.NotificationSound;
+            ActiveOnlyRow.IsOn = settings.NotificationsOnlyWhenActive;
+            CameraPopupRow.IsOn = settings.CameraPopupsEnabled;
         }
         StatusText.Text = !supported ? status : !registered ? "Connect to Home Assistant in Settings." :
             settings.NotificationsEnabled && (!connected || status != "Connected") ? status : "";
@@ -98,9 +102,12 @@ public sealed partial class NotificationSettingsView : UserControl
         SoundRow.IsToggleEnabled = !_busy && _supported && MasterRow.IsOn;
         SoundRow.Opacity = _supported && MasterRow.IsOn ? 1 : 0.55;
         TestButton.IsEnabled = !_busy && _supported;
+        ActiveOnlyRow.IsToggleEnabled = CameraPopupRow.IsToggleEnabled = !_busy && _supported && _registered && MasterRow.IsOn;
     }
 
     private void Master_Changed(object? sender, EventArgs args) => EnabledChanged?.Invoke(MasterRow.IsOn);
     private void Sound_Changed(object? sender, EventArgs args) => SoundChanged?.Invoke(SoundRow.IsOn);
+    private void ActiveOnly_Changed(object? sender, EventArgs args) => ActiveOnlyChanged?.Invoke(ActiveOnlyRow.IsOn);
+    private void CameraPopup_Changed(object? sender, EventArgs args) => CameraPopupChanged?.Invoke(CameraPopupRow.IsOn);
     private void Test_Click(object sender, RoutedEventArgs args) => TestRequested?.Invoke();
 }

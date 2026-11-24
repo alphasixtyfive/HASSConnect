@@ -25,6 +25,9 @@ actions you choose. HASS Connect stays in the tray and uses Home Assistant’s
 [Mobile App integration](https://www.home-assistant.io/integrations/mobile_app/).
 No MQTT broker or custom integration is required.
 
+Open a live camera from Quick Access or a Home Assistant alert. Camera tiles can
+have their own buttons, and compatible local go2rtc streams support talkback.
+
 ## Getting started
 
 HASS Connect supports Windows 11 x64. Download Setup from the

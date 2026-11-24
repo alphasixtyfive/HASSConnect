@@ -57,6 +57,27 @@ public sealed class NotificationMessageTests
         Assert.Null(NotificationMessage.Parse(json.RootElement).Url);
     }
 
+    [Theory]
+    [InlineData("camera.front_door", "true", "camera.front_door", true)]
+    [InlineData("camera.front_gate", "false", "camera.front_gate", false)]
+    [InlineData("camera.front_gate", "\"true\"", "camera.front_gate", false)]
+    [InlineData("light.front_door", "true", null, false)]
+    [InlineData("https://example.test/stream.m3u8", "true", null, false)]
+    public void CameraFieldsAreIndependentOfTheSnapshotAndBrowserLink(string entity, string popup,
+        string? expectedCamera, bool expectedPopup)
+    {
+        using var json = JsonDocument.Parse($$"""
+            {"message":"Door","data":{"camera_entity_id":"{{entity}}","camera_popup":{{popup}},
+            "image":"/local/door.jpg","url":"/dashboard-intercom/front-door"} }
+            """);
+        var message = NotificationMessage.Parse(json.RootElement);
+
+        Assert.Equal(expectedCamera, message.Camera);
+        Assert.Equal(expectedPopup, message.CameraPopup);
+        Assert.Equal("/local/door.jpg", message.Image);
+        Assert.Equal("/dashboard-intercom/front-door", message.Url);
+    }
+
     [Fact]
     public void ReadsOnlyAnExplicitPersistentFlag()
     {

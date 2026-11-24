@@ -15,6 +15,8 @@ public sealed record Settings
     public bool ShareSensors { get; init; } = true;
     public bool NotificationsEnabled { get; init; }
     public bool NotificationSound { get; init; } = true;
+    public bool NotificationsOnlyWhenActive { get; init; }
+    public bool CameraPopupsEnabled { get; init; }
     public bool PcControlEnabled { get; init; }
     public HashSet<string> EnabledPcCommands { get; init; } = new(PcCommandIds.All);
     public IReadOnlyList<CustomCommandDefinition> CustomCommands { get; init; } = [];

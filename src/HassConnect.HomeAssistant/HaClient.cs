@@ -3,11 +3,12 @@ using System.Net.Http.Json;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using HassConnect.Core;
 
 namespace HassConnect.HomeAssistant;
 
-public sealed class HaClient : IDisposable
+public sealed partial class HaClient : IDisposable
 {
     private static readonly SocketsHttpHandler SharedTransport = new()
     {
@@ -48,6 +49,29 @@ public sealed class HaClient : IDisposable
         if (!components.EnumerateArray().Any(x => x.GetString() == "mobile_app"))
             throw new InvalidOperationException("Enable the Mobile App integration in Home Assistant first.");
     }
+
+    public async Task<Uri> GetCameraStreamAsync(string entityId, CancellationToken ct)
+    {
+        if (!CameraEntityId.IsValid(entityId))
+            throw new ArgumentException("Enter a camera entity ID, for example camera.front_door.", nameof(entityId));
+
+        var server = _http.BaseAddress!;
+        await using var socket = await HaWebSocket.ConnectAsync(server, _token, ct).ConfigureAwait(false);
+        await socket.SendAsync(new { id = 1, type = "camera/stream", entity_id = entityId, format = "hls" }, ct)
+            .ConfigureAwait(false);
+        var result = await socket.ReadResultAsync(1, ct).ConfigureAwait(false);
+        return ResolveCameraStream(server, StringProperty(result, "url"));
+    }
+
+    internal static Uri ResolveCameraStream(Uri server, string? path)
+    {
+        if (path is null || !CameraStreamPathPattern().IsMatch(path))
+            throw new InvalidDataException("Home Assistant did not return a camera stream.");
+        return new Uri(server, path);
+    }
+
+    [GeneratedRegex(@"\A/api/hls/[A-Za-z0-9_-]{12,128}/[A-Za-z0-9_-]{1,64}\.m3u8\z", RegexOptions.CultureInvariant)]
+    private static partial Regex CameraStreamPathPattern();
 
     public async Task<IReadOnlyList<QuickActionEntity>> GetQuickActionEntitiesAsync(CancellationToken ct)
     {
@@ -107,6 +131,8 @@ public sealed class HaClient : IDisposable
     {
         ArgumentNullException.ThrowIfNull(action);
         var validated = QuickActionPolicy.Create(action.EntityId, action.Label, action.Icon, action.Operation);
+        if (validated.Operation == QuickActionPolicy.ViewCamera)
+            throw new ArgumentException("Camera tiles open the local viewer.", nameof(action));
         if (percentage is < 0 or > 100 || QuickActionPolicy.IsLevel(validated.Operation) != percentage.HasValue)
             throw new ArgumentException("Enter a percentage from 0 to 100 for a level action.", nameof(percentage));
 

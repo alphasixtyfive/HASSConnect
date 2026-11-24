@@ -97,7 +97,7 @@ internal static class WindowsSensors
         }
     }
 
-    private static bool SessionLocked()
+    internal static bool SessionLocked()
     {
         const int currentSession = -1;
         const int sessionInfoEx = 25;
@@ -119,7 +119,7 @@ internal static class WindowsSensors
         finally { WTSFreeMemory(buffer); }
     }
 
-    private static long IdleSeconds()
+    internal static long IdleSeconds()
     {
         var info = new LastInputInfo { Size = (uint)Marshal.SizeOf<LastInputInfo>() };
         if (!GetLastInputInfo(ref info)) throw new Win32Exception(Marshal.GetLastWin32Error());

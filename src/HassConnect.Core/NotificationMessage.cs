@@ -12,6 +12,8 @@ public sealed record NotificationMessage(string? Title, string Message, string? 
     public string NotificationId { get; init; } = Guid.NewGuid().ToString("N");
     public bool Persistent { get; init; }
     public string? Url { get; init; }
+    public string? Camera { get; init; }
+    public bool CameraPopup { get; init; }
     public bool IsClear => Message == "clear_notification";
     public PcCommand? Command { get; init; }
 
@@ -24,6 +26,8 @@ public sealed record NotificationMessage(string? Title, string Message, string? 
         string? image = null;
         string? tag = null;
         string? url = null;
+        string? camera = null;
+        var cameraPopup = false;
         var persistent = false;
         JsonElement? actionData = null;
         JsonElement? commandData = null;
@@ -39,6 +43,12 @@ public sealed record NotificationMessage(string? Title, string Message, string? 
                 actionData = context.Clone();
             image = Text(data, "image", 2048);
             url = Text(data, "url", 2048);
+            var cameraId = Text(data, "camera_entity_id", int.MaxValue);
+            if (CameraEntityId.IsValid(cameraId))
+            {
+                camera = cameraId;
+                cameraPopup = data.TryGetProperty("camera_popup", out var popup) && popup.ValueKind == JsonValueKind.True;
+            }
             if (data.TryGetProperty("actions", out var items) && items.ValueKind == JsonValueKind.Array)
                 foreach (var item in items.EnumerateArray())
                 {
@@ -59,7 +69,9 @@ public sealed record NotificationMessage(string? Title, string Message, string? 
             ActionData = actionData,
             Command = PcCommand.Parse(message, commandData),
             Persistent = persistent,
-            Url = string.IsNullOrWhiteSpace(url) ? null : url
+            Url = string.IsNullOrWhiteSpace(url) ? null : url,
+            Camera = camera,
+            CameraPopup = cameraPopup
         };
     }
 

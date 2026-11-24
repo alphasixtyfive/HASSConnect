@@ -11,6 +11,9 @@ public sealed record QuickActionDefinition(string EntityId, string Label, string
 {
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public QuickActionSize Size { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? CameraEntityId { get; init; }
 }
 
 public sealed record QuickActionEntity(string EntityId, string Name, string Icon, string State,
@@ -74,18 +77,20 @@ public static partial class QuickActionPolicy
     public const string StopCover = "stop_cover";
     public const string Brightness = "brightness";
     public const string Volume = "volume";
+    public const string ViewCamera = "view_camera";
 
     private static readonly IReadOnlyList<string> ToggleOperations =
         Array.AsReadOnly([Toggle, TurnOn, TurnOff]);
     private static readonly IReadOnlyList<string> RunOperations = Array.AsReadOnly([Run]);
     private static readonly IReadOnlyList<string> LightLevelOperations = Array.AsReadOnly([Toggle, TurnOn, TurnOff, Brightness]);
     private static readonly IReadOnlyList<string> MediaPlayerOperations = Array.AsReadOnly([Volume]);
+    private static readonly IReadOnlyList<string> CameraOperations = Array.AsReadOnly([ViewCamera]);
     private static readonly IReadOnlyList<string> CoverOperations =
         Array.AsReadOnly([Toggle, OpenCover, CloseCover, StopCover]);
     private static readonly IReadOnlyList<string> NoOperations = Array.Empty<string>();
 
     public static QuickActionDefinition Create(string? entityId, string? label, string? icon, string? operation,
-        QuickActionSize size = QuickActionSize.Auto)
+        QuickActionSize size = QuickActionSize.Auto, string? cameraEntityId = null)
     {
         var id = entityId?.Trim() ?? "";
         var operations = AllowedOperations(id);
@@ -106,7 +111,10 @@ public static partial class QuickActionPolicy
         if (!Enum.IsDefined(size))
             throw new ArgumentException("Choose a supported tile size.", nameof(size));
 
-        return new(id, name, selectedIcon, selectedOperation) { Size = size };
+        if (cameraEntityId is not null && (!CameraEntityId.IsValid(cameraEntityId) || !CanShowOnCamera(selectedOperation)))
+            throw new ArgumentException("Choose a camera for a button action.", nameof(cameraEntityId));
+
+        return new(id, name, selectedIcon, selectedOperation) { Size = size, CameraEntityId = cameraEntityId };
     }
 
     public static IReadOnlyList<QuickActionDefinition> ValidateCollection(IEnumerable<QuickActionDefinition>? actions)
@@ -116,18 +124,18 @@ public static partial class QuickActionPolicy
             throw new InvalidDataException($"No more than {MaximumActions} quick actions can be configured.");
 
         var result = new List<QuickActionDefinition>(source.Count);
-        var keys = new HashSet<(string EntityId, string Operation)>();
+        var keys = new HashSet<(string EntityId, string Operation, string? CameraEntityId)>();
         foreach (var action in source)
         {
             if (action is null)
                 throw new InvalidDataException("Quick action configuration contains an empty entry.");
             QuickActionDefinition validated;
-            try { validated = Create(action.EntityId, action.Label, action.Icon, action.Operation, action.Size); }
+            try { validated = Create(action.EntityId, action.Label, action.Icon, action.Operation, action.Size, action.CameraEntityId); }
             catch (ArgumentException exception)
             {
                 throw new InvalidDataException($"Quick action configuration is invalid: {exception.Message}", exception);
             }
-            if (!keys.Add((validated.EntityId, validated.Operation)))
+            if (!keys.Add((validated.EntityId, validated.Operation, validated.CameraEntityId)))
                 throw new InvalidDataException($"The {validated.Operation} action for {validated.EntityId} is configured more than once.");
             result.Add(validated);
         }
@@ -135,6 +143,9 @@ public static partial class QuickActionPolicy
     }
 
     public static bool IsLevel(string operation) => operation is Brightness or Volume;
+
+    public static bool CanShowOnCamera(string? operation) =>
+        operation is not null && operation != ViewCamera && !IsLevel(operation);
 
     public static IReadOnlyList<string> AllowedOperations(string? entityId, int? supportedFeatures = null,
         bool? supportsBrightness = null)
@@ -159,6 +170,7 @@ public static partial class QuickActionPolicy
             "media_player" when supportedFeatures is null ||
                 supportedFeatures >= 0 && (supportedFeatures.Value & MediaPlayerVolumeSet) != 0 => MediaPlayerOperations,
             "script" or "scene" or "button" => RunOperations,
+            "camera" when CameraEntityId.IsValid(entityId) => CameraOperations,
             _ => NoOperations
         };
     }
@@ -173,6 +185,7 @@ public static partial class QuickActionPolicy
         "scene" => "mdi:palette",
         "button" => "mdi:gesture-tap-button",
         "media_player" => "mdi:volume-high",
+        "camera" => "mdi:camera",
         _ => "mdi:home-assistant"
     };
 

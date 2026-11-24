@@ -10,6 +10,9 @@ The current release version lives in `Directory.Build.props`.
 - On a clean Windows 11 account, check first launch, connection errors, sensors, startup and tray exit.
 - Verify a notification with a snapshot, a body `url` and two buttons. Check the
   body link, returned HA event, replacement by tag and clearing.
+- Send a camera alert with a snapshot. Check **View live**, the automatic popup
+  setting and the muted microphone default. With **Only show while active** on,
+  confirm that alerts pause when Windows is locked or idle.
 - Test an upgrade and uninstall. Preserve settings and encrypted credentials; remove shortcuts, startup entries and notification registration owned by the app.
 - Check the release archive for credentials, signing keys, test photos, diagnostic logs and development output.
 - Run the [product screenshot quality gate](screenshots.md). Publish only native-resolution,

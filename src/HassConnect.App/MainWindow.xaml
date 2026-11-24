@@ -226,74 +226,96 @@
     </ContentDialog>
     <ContentDialog Grid.ColumnSpan="2" x:Name="QuickActionDialog" Title="Quick action">
       <StackPanel Spacing="12" MinWidth="420">
-        <Grid ColumnSpacing="8" RowSpacing="4">
-          <Grid.ColumnDefinitions><ColumnDefinition Width="2*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-          <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
-          <TextBlock Text="Entity" />
-          <TextBlock Grid.Column="1" Text="Type" />
-          <TextBox x:Name="QuickEntitySearch" Grid.Row="1" Height="36" PlaceholderText="Search name or ID"
-                   GotFocus="QuickEntitySearch_GotFocus" TextChanged="QuickEntitySearch_TextChanged" KeyDown="QuickEntitySearch_KeyDown"
-                   AutomationProperties.Name="Search Home Assistant entities" />
-          <ComboBox x:Name="QuickEntityTypeBox" Grid.Row="1" Grid.Column="1" Height="36" HorizontalAlignment="Stretch"
-                    SelectionChanged="QuickEntityType_Changed" AutomationProperties.Name="Filter entity type">
-            <ComboBoxItem Content="All" Tag="" />
-            <ComboBoxItem Content="Lights" Tag="light" />
-            <ComboBoxItem Content="Switches" Tag="switch" />
-            <ComboBoxItem Content="Toggles" Tag="input_boolean" />
-            <ComboBoxItem Content="Fans" Tag="fan" />
-            <ComboBoxItem Content="Covers" Tag="cover" />
-            <ComboBoxItem Content="Media players" Tag="media_player" />
-            <ComboBoxItem Content="Scripts" Tag="script" />
-            <ComboBoxItem Content="Scenes" Tag="scene" />
-            <ComboBoxItem Content="Buttons" Tag="button" />
-          </ComboBox>
-        </Grid>
-        <ListView x:Name="QuickEntityList" MaxHeight="144" SelectionMode="Single" Visibility="Collapsed"
-                  ScrollViewer.VerticalScrollMode="Enabled" ScrollViewer.VerticalScrollBarVisibility="Auto"
-                  SelectionChanged="QuickEntityList_SelectionChanged" AutomationProperties.Name="Matching entities">
-          <ListView.ItemTemplate>
-            <DataTemplate>
-              <Grid ColumnSpacing="10" Padding="0,3,0,0">
-                <Grid.ColumnDefinitions><ColumnDefinition Width="22" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+        <Grid>
+          <Border x:Name="QuickTileSettingsBackground" Style="{StaticResource Card}" Visibility="Collapsed" />
+          <StackPanel x:Name="QuickTileSettingsFields" Spacing="10">
+            <Grid x:Name="SelectedCameraRow" ColumnSpacing="10" Visibility="Collapsed">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="24" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <FontIcon Glyph="&#xE722;" FontSize="18" VerticalAlignment="Center" />
+              <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                <TextBlock Text="Camera" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                <TextBlock x:Name="SelectedCameraEntity" FontSize="12" TextTrimming="CharacterEllipsis"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+              </StackPanel>
+              <Button x:Name="ChangeCameraButton" Grid.Column="2" Content="Change" Height="32"
+                      VerticalAlignment="Center" Click="ChangeCamera_Click" />
+            </Grid>
+            <StackPanel x:Name="QuickEntityBrowser" Spacing="8">
+              <Grid ColumnSpacing="8" RowSpacing="4">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="2*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                 <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
-                <FontIcon Glyph="{Binding Glyph}" FontSize="18" Width="22" VerticalAlignment="Center"
-                          Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                <StackPanel Grid.Column="1" Spacing="2">
-                  <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
-                  <TextBlock Text="{Binding EntityId}" FontSize="12" TextTrimming="CharacterEllipsis"
-                             Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                </StackPanel>
-                <Border Grid.Row="1" Grid.Column="1" Height="1" Margin="0,5,0,0"
-                        Background="{ThemeResource SectionBorderBrush}" Opacity="{Binding SeparatorOpacity}" />
+                <TextBlock Text="Entity" />
+                <TextBlock x:Name="QuickEntityTypeLabel" Grid.Column="1" Text="Type" />
+                <TextBox x:Name="QuickEntitySearch" Grid.Row="1" Height="36" PlaceholderText="Search name or ID"
+                         GotFocus="QuickEntitySearch_GotFocus" TextChanged="QuickEntitySearch_TextChanged" KeyDown="QuickEntitySearch_KeyDown"
+                         AutomationProperties.Name="Search Home Assistant entities" />
+                <ComboBox x:Name="QuickEntityTypeBox" Grid.Row="1" Grid.Column="1" Height="36" HorizontalAlignment="Stretch"
+                          SelectionChanged="QuickEntityType_Changed" AutomationProperties.Name="Filter entity type">
+                  <ComboBoxItem Content="All" Tag="" />
+                  <ComboBoxItem Content="Lights" Tag="light" />
+                  <ComboBoxItem Content="Switches" Tag="switch" />
+                  <ComboBoxItem Content="Toggles" Tag="input_boolean" />
+                  <ComboBoxItem Content="Fans" Tag="fan" />
+                  <ComboBoxItem Content="Covers" Tag="cover" />
+                  <ComboBoxItem Content="Cameras" Tag="camera" />
+                  <ComboBoxItem Content="Media players" Tag="media_player" />
+                  <ComboBoxItem Content="Scripts" Tag="script" />
+                  <ComboBoxItem Content="Scenes" Tag="scene" />
+                  <ComboBoxItem Content="Buttons" Tag="button" />
+                </ComboBox>
               </Grid>
-            </DataTemplate>
-          </ListView.ItemTemplate>
-        </ListView>
-        <TextBlock x:Name="QuickEntityStatus" FontSize="12" TextWrapping="Wrap" Visibility="Collapsed"
-                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" AutomationProperties.LiveSetting="Polite" />
-        <TextBox x:Name="QuickActionLabelBox" Header="Label" MaxLength="40" PlaceholderText="e.g. Desk light" />
-        <Grid ColumnSpacing="12">
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="108" />
-          </Grid.ColumnDefinitions>
-          <StackPanel Spacing="4">
-            <TextBlock Text="Action" />
-            <ComboBox x:Name="QuickActionOperationBox" Height="36" HorizontalAlignment="Stretch"
-                      MinWidth="0" IsEnabled="False" PlaceholderText="Choose entity"
-                      SelectionChanged="QuickActionOperation_Changed" AutomationProperties.Name="Action to perform" />
-          </StackPanel>
-          <views:QuickActionIconPicker x:Name="QuickActionIconPicker" Grid.Column="1" />
-          <StackPanel Grid.Column="2" Spacing="4">
-            <TextBlock Text="Tile size" />
-            <ComboBox x:Name="QuickActionSizeBox" Height="36" HorizontalAlignment="Stretch"
-                      AutomationProperties.Name="Tile size"
-                      ToolTipService.ToolTip="Compact uses one column. Wide spans both columns.">
-              <ComboBoxItem Content="Auto" />
-              <ComboBoxItem Content="Compact" />
-              <ComboBoxItem Content="Wide" />
-            </ComboBox>
+              <ListView x:Name="QuickEntityList" MaxHeight="144" SelectionMode="Single" Visibility="Collapsed"
+                        ScrollViewer.VerticalScrollMode="Enabled" ScrollViewer.VerticalScrollBarVisibility="Auto"
+                        SelectionChanged="QuickEntityList_SelectionChanged" AutomationProperties.Name="Matching entities">
+                <ListView.ItemTemplate>
+                  <DataTemplate>
+                    <Grid ColumnSpacing="10" Padding="0,3,0,0">
+                      <Grid.ColumnDefinitions><ColumnDefinition Width="22" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                      <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                      <FontIcon Glyph="{Binding Glyph}" FontSize="18" Width="22" VerticalAlignment="Center"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                      <StackPanel Grid.Column="1" Spacing="2">
+                        <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding EntityId}" FontSize="12" TextTrimming="CharacterEllipsis"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                      </StackPanel>
+                      <Border Grid.Row="1" Grid.Column="1" Height="1" Margin="0,5,0,0"
+                              Background="{ThemeResource SectionBorderBrush}" Opacity="{Binding SeparatorOpacity}" />
+                    </Grid>
+                  </DataTemplate>
+                </ListView.ItemTemplate>
+              </ListView>
+              <TextBlock x:Name="QuickEntityStatus" FontSize="12" TextWrapping="Wrap" Visibility="Collapsed"
+                         Foreground="{ThemeResource TextFillColorSecondaryBrush}" AutomationProperties.LiveSetting="Polite" />
+            </StackPanel>
+            <TextBox x:Name="QuickActionLabelBox" Header="Label" MaxLength="40" PlaceholderText="e.g. Desk light" />
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition x:Name="QuickActionOperationColumn" Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <StackPanel x:Name="QuickActionOperationOptions" Spacing="4">
+                <TextBlock Text="Action" />
+                <ComboBox x:Name="QuickActionOperationBox" Height="36" HorizontalAlignment="Stretch"
+                          MinWidth="0" IsEnabled="False" PlaceholderText="Choose entity"
+                          SelectionChanged="QuickActionOperation_Changed" AutomationProperties.Name="Action to perform" />
+              </StackPanel>
+              <views:QuickActionIconPicker x:Name="QuickActionIconPicker" Grid.Column="1" Margin="12,0,0,0" />
+              <StackPanel x:Name="QuickActionSizeOptions" Grid.Column="2" Spacing="4" Width="108" Margin="12,0,0,0">
+                <TextBlock Text="Tile size" />
+                <ComboBox x:Name="QuickActionSizeBox" Height="36" HorizontalAlignment="Stretch"
+                          AutomationProperties.Name="Tile size"
+                          ToolTipService.ToolTip="Compact uses one column. Wide spans both columns.">
+                  <ComboBoxItem Content="Auto" />
+                  <ComboBoxItem Content="Compact" />
+                  <ComboBoxItem Content="Wide" />
+                </ComboBox>
+              </StackPanel>
+            </Grid>
           </StackPanel>
         </Grid>
+        <StackPanel x:Name="CameraActionEditor" Spacing="8" Visibility="Collapsed" />
         <TextBlock x:Name="QuickActionError" Visibility="Collapsed" TextWrapping="Wrap"
                    Foreground="{ThemeResource SystemFillColorCriticalBrush}" AutomationProperties.LiveSetting="Assertive" />
         <Border BorderBrush="{ThemeResource SectionBorderBrush}" BorderThickness="0,1,0,0" Padding="0,12,0,0" Margin="0,2,0,0">

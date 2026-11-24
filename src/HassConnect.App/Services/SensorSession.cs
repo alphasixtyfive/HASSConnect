@@ -63,6 +63,7 @@ internal sealed class SensorSession : IAsyncDisposable
         _settings = store.LoadSettings();
         _credentials = store.LoadCredentials();
         _display = new DisplayStateMonitor(window);
+        if (_settings.NotificationsOnlyWhenActive) StartDisplayMonitor();
         if (_credentials?.WebhookId is not null && !string.IsNullOrWhiteSpace(_settings.ServerUrl))
         {
             var server = ServerAddress.Parse(_settings.ServerUrl);
@@ -180,7 +181,7 @@ internal sealed class SensorSession : IAsyncDisposable
         await _gate.WaitAsync(_lifetime.Token);
         try
         {
-            var next = _settings with { ServerUrl = "", HomeAssistantPath = "" };
+            var next = _settings with { ServerUrl = "", HomeAssistantPath = "", CameraPopupsEnabled = false };
             _store.SaveConnection(next, null);
             _settings = next;
             _credentials = null;
@@ -236,6 +237,22 @@ internal sealed class SensorSession : IAsyncDisposable
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token, cancellationToken);
         var connection = QuickActionConnectionOrThrow();
         return await DashboardCatalog.GetAsync(connection.Server, connection.AccessToken, linked.Token);
+    }
+
+    public async Task<Uri> GetCameraStreamAsync(string entityId, CancellationToken cancellationToken)
+    {
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token, cancellationToken);
+        var connection = QuickActionConnectionOrThrow();
+        using var client = new HaClient(connection.Server, connection.AccessToken);
+        return await client.GetCameraStreamAsync(entityId, linked.Token);
+    }
+
+    public async Task OpenCameraAudioAsync(string entityId, bool microphoneEnabled, Func<bool> speakerEnabled,
+        Action connected, CancellationToken cancellationToken)
+    {
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token, cancellationToken);
+        await CameraAudio.RunAsync(QuickActionConnectionOrThrow().Server, entityId, microphoneEnabled, speakerEnabled,
+            connected, linked.Token);
     }
 
     public async Task SetHomeAssistantPathAsync(string? path)
@@ -298,9 +315,16 @@ internal sealed class SensorSession : IAsyncDisposable
         try
         {
             var actions = _settings.QuickActions.ToList();
+            if (action.CameraEntityId is { } camera && !actions.Any(tile => tile.Operation == QuickActionPolicy.ViewCamera && tile.EntityId == camera))
+                throw new InvalidOperationException("Add the camera tile before configuring its actions.");
             if (index is { } position)
             {
                 if (position < 0 || position >= actions.Count) throw new ArgumentOutOfRangeException(nameof(index));
+                var original = actions[position];
+                if (original.Operation == QuickActionPolicy.ViewCamera &&
+                    (action.Operation != original.Operation || action.EntityId != original.EntityId) &&
+                    actions.Any(item => item.CameraEntityId == original.EntityId))
+                    throw new InvalidOperationException("Remove this camera’s actions before changing its entity.");
                 actions[position] = action;
             }
             else actions.Add(action);
@@ -316,7 +340,10 @@ internal sealed class SensorSession : IAsyncDisposable
         {
             var actions = _settings.QuickActions.ToList();
             if (index < 0 || index >= actions.Count) throw new ArgumentOutOfRangeException(nameof(index));
+            var action = actions[index];
             actions.RemoveAt(index);
+            if (action.Operation == QuickActionPolicy.ViewCamera)
+                actions.RemoveAll(item => item.CameraEntityId == action.EntityId);
             SaveSettings(_settings with { QuickActions = actions });
         }
         finally { _gate.Release(); Changed?.Invoke(); }
@@ -328,11 +355,16 @@ internal sealed class SensorSession : IAsyncDisposable
         try
         {
             var actions = _settings.QuickActions.ToList();
-            var destination = index + direction;
-            if (direction is not (-1 or 1) || index < 0 || destination < 0 || destination >= actions.Count)
+            if (direction is not (-1 or 1) || index < 0 || index >= actions.Count)
                 throw new ArgumentOutOfRangeException(nameof(index));
-            (actions[index], actions[destination]) = (actions[destination], actions[index]);
-            SaveSettings(_settings with { QuickActions = actions });
+            var location = actions[index].CameraEntityId;
+            for (var destination = index + direction; destination >= 0 && destination < actions.Count; destination += direction)
+            {
+                if (actions[destination].CameraEntityId != location) continue;
+                (actions[index], actions[destination]) = (actions[destination], actions[index]);
+                SaveSettings(_settings with { QuickActions = actions });
+                break;
+            }
         }
         finally { _gate.Release(); Changed?.Invoke(); }
     }
@@ -357,6 +389,47 @@ internal sealed class SensorSession : IAsyncDisposable
         try
         {
             SaveSettings(_settings with { NotificationSound = sound });
+            _notifications.UpdateOptions(_settings);
+        }
+        finally { _gate.Release(); Changed?.Invoke(); }
+    }
+
+    public async Task SetNotificationsOnlyWhenActiveAsync(bool enabled)
+    {
+        await _gate.WaitAsync(_lifetime.Token);
+        try
+        {
+            SaveSettings(_settings with { NotificationsOnlyWhenActive = enabled });
+            if (enabled) StartDisplayMonitor();
+            else if (!_settings.ShareSensors || !_settings.EnabledSensors.Contains("display_state")) _display.Reset();
+            _notifications.UpdateOptions(_settings);
+        }
+        finally { _gate.Release(); Changed?.Invoke(); }
+    }
+
+    public bool IsUserActive()
+    {
+        var displayState = _display.State;
+        if (displayState == "off") return false;
+        try
+        {
+            return NotificationPresence.IsActive(displayState, WindowsSensors.SessionLocked(), WindowsSensors.IdleSeconds());
+        }
+        catch (Exception ex) when (ex is Win32Exception or InvalidDataException) { return false; }
+    }
+
+    private void StartDisplayMonitor()
+    {
+        try { _display.Start(); }
+        catch (Win32Exception ex) { AppLog.Write("Monitor display for notifications", ex); }
+    }
+
+    public async Task SetCameraPopupsEnabledAsync(bool enabled)
+    {
+        await _gate.WaitAsync(_lifetime.Token);
+        try
+        {
+            SaveSettings(_settings with { CameraPopupsEnabled = enabled });
             _notifications.UpdateOptions(_settings);
         }
         finally { _gate.Release(); Changed?.Invoke(); }
@@ -615,8 +688,8 @@ internal sealed class SensorSession : IAsyncDisposable
 
     private void ResetSensor(string id)
     {
-        if (id == "display_state") _display.Reset();
-        else WindowsSensors.Reset(id);
+        if (id != "display_state") WindowsSensors.Reset(id);
+        else if (!_settings.NotificationsOnlyWhenActive) _display.Reset();
     }
 
     private void SetStatus(SessionState state, string detail, bool connected)

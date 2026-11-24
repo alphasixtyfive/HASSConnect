@@ -16,6 +16,8 @@ public sealed partial class MainWindow
     private string? _selectedQuickEntityId;
     private string? _suggestedQuickLabel;
     private int? _editingQuickIndex;
+    private string? _editingCameraEntityId;
+    private bool _editingCameraTile;
     private bool _quickDialogOpen;
     private bool _browseQuickEntities;
     private bool _quickSaving;
@@ -31,7 +33,7 @@ public sealed partial class MainWindow
         _quickSearchTimer.IsRepeating = false;
         _quickSearchTimer.Tick += (_, _) => FilterQuickEntities();
         QuickAccessPage.AddRequested += () => _ = ShowQuickActionDialogAsync(null);
-        QuickAccessPage.EditRequested += index => _ = ShowQuickActionDialogAsync(index);
+        QuickAccessPage.EditRequested += index => _ = EditQuickActionAsync(index);
         QuickAccessPage.RemoveRequested += index => _ = RemoveQuickActionAsync(index);
         QuickAccessPage.MoveRequested += (index, direction) => _ = MoveQuickActionAsync(index, direction);
         QuickAccessPage.ShortcutChanged += shortcut => _ = SetQuickAccessShortcutAsync(shortcut);
@@ -55,11 +57,12 @@ public sealed partial class MainWindow
         if (_quickAccessWindow is null || _session is null) { ShowWindow(); return; }
         if (_quickAccessWindow.IsVisible) { _quickAccessWindow.Hide(); _quickStateRequest++; return; }
         _quickAccessWindow.SetTheme(Root.ActualTheme);
+        var tiles = _session.Settings.QuickActions.Where(action => action.CameraEntityId is null).ToArray();
         if (fromShortcut)
-            _quickAccessWindow.ShowFromShortcut(_session.Settings.QuickActions, _session.Connected);
+            _quickAccessWindow.ShowFromShortcut(tiles, _session.Connected);
         else
-            _quickAccessWindow.ShowNearTray(_session.Settings.QuickActions, _session.Connected);
-        if (_session.Connected && _session.Settings.QuickActions.Count > 0)
+            _quickAccessWindow.ShowNearTray(tiles, _session.Connected);
+        if (_session.Connected && tiles.Length > 0)
             _ = RefreshQuickActionStatesAsync();
     }
 
@@ -96,6 +99,12 @@ public sealed partial class MainWindow
         _quickStateRequest++; // Ignore any state request started before this command.
         try
         {
+            if (action.Operation == QuickActionPolicy.ViewCamera)
+            {
+                if (OpenLiveCamera(new(action.EntityId, action.Label))) _quickAccessWindow.Hide();
+                else _quickAccessWindow.ShowError("Connect to Home Assistant first.");
+                return;
+            }
             await _session.InvokeQuickActionAsync(action, level);
             if (!IsCurrentQuickInteraction(generation)) return;
             _quickAccessWindow.CompleteAction();
@@ -128,7 +137,8 @@ public sealed partial class MainWindow
         try
         {
             var states = await _session.GetQuickActionStatesAsync(
-                _session.Settings.QuickActions.Select(action => action.EntityId).Distinct().ToArray(), cancellation.Token);
+                _session.Settings.QuickActions.Where(action => action.CameraEntityId is null && action.Operation != QuickActionPolicy.ViewCamera)
+                    .Select(action => action.EntityId).Distinct().ToArray(), cancellation.Token);
             if (request == _quickStateRequest && IsCurrentQuickInteraction(generation))
                 _quickAccessWindow.SetEntityStates(states, preserveOptimistic);
         }
@@ -155,8 +165,11 @@ public sealed partial class MainWindow
     {
         if (_session is null || index < 0 || index >= _session.Settings.QuickActions.Count) return;
         var action = _session.Settings.QuickActions[index];
+        var hasCameraActions = action.Operation == QuickActionPolicy.ViewCamera &&
+            _session.Settings.QuickActions.Any(item => item.CameraEntityId == action.EntityId);
+        var message = hasCameraActions ? $"Remove “{action.Label}” and its camera actions?" : $"Remove “{action.Label}”?";
         var confirmed = await Views.DialogLayout.ShowConfirmationAsync(
-            Root.XamlRoot, "Remove quick action?", $"Remove “{action.Label}” from Quick access?",
+            Root.XamlRoot, "Remove action?", message,
             "Remove", destructive: true);
         if (!confirmed) return;
         try { await _session.RemoveQuickActionAsync(index); }
@@ -164,25 +177,30 @@ public sealed partial class MainWindow
         finally { Refresh(); }
     }
 
-    private async Task ShowQuickActionDialogAsync(int? index)
+    private async Task<CameraActionEdit?> ShowQuickActionDialogAsync(int? index, QuickActionDefinition? camera = null)
     {
-        if (_session is null || _quickDialogOpen) return;
-        if (index is { } position && (position < 0 || position >= _session.Settings.QuickActions.Count)) return;
+        if (_session is null || _quickDialogOpen) return null;
+        if (index is { } position && (position < 0 || position >= _session.Settings.QuickActions.Count)) return null;
         _quickDialogOpen = true;
         using var loadCancellation = new CancellationTokenSource();
+        CameraActionEdit? cameraAction = null;
         void OnDialogClosed(ContentDialog sender, ContentDialogClosedEventArgs args) => loadCancellation.Cancel();
         QuickActionDialog.Closed += OnDialogClosed;
         try
         {
             _quickSearchTimer?.Stop();
             _editingQuickIndex = index;
+            _editingCameraEntityId = camera?.EntityId;
             _quickEntities = [];
             var existing = index is { } i ? _session.Settings.QuickActions[i] : null;
+            _editingCameraTile = existing?.Operation == QuickActionPolicy.ViewCamera;
             _selectedQuickEntityId = existing?.EntityId;
             _browseQuickEntities = existing is null;
             _suggestedQuickLabel = null;
             QuickActionDialog.XamlRoot = Root.XamlRoot;
-            QuickActionDialog.Title = existing is null ? "Add tile" : "Edit tile";
+            QuickActionDialog.Title = _editingCameraTile ? "Edit camera tile" : camera is null
+                ? existing is null ? "Add tile" : "Edit tile"
+                : existing is null ? "Add camera action" : "Edit camera action";
             SaveQuickActionButton.Content = existing is null ? "Add" : "Save";
             QuickActionError.Visibility = Visibility.Collapsed;
             QuickEntityStatus.Text = "Loading entities…";
@@ -190,6 +208,17 @@ public sealed partial class MainWindow
             QuickEntitySearch.IsEnabled = QuickEntityTypeBox.IsEnabled = false;
             QuickActionLabelBox.Text = existing?.Label ?? "";
             QuickActionSizeBox.SelectedIndex = (int)(existing?.Size ?? QuickActionSize.Auto);
+            QuickActionSizeOptions.Visibility = camera is null ? Visibility.Visible : Visibility.Collapsed;
+            QuickTileSettingsBackground.Visibility = _editingCameraTile ? Visibility.Visible : Visibility.Collapsed;
+            QuickTileSettingsFields.Margin = _editingCameraTile ? new Thickness(12) : new Thickness(0);
+            SelectedCameraRow.Visibility = _editingCameraTile ? Visibility.Visible : Visibility.Collapsed;
+            SelectedCameraEntity.Text = _editingCameraTile ? _selectedQuickEntityId ?? "" : "";
+            SetQuickEntityBrowser(open: !_editingCameraTile);
+            QuickEntityTypeLabel.Visibility = QuickEntityTypeBox.Visibility = _editingCameraTile ? Visibility.Collapsed : Visibility.Visible;
+            Grid.SetColumnSpan(QuickEntitySearch, _editingCameraTile ? 2 : 1);
+            QuickActionOperationOptions.Visibility = _editingCameraTile ? Visibility.Collapsed : Visibility.Visible;
+            QuickActionOperationColumn.Width = _editingCameraTile ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
+            QuickActionIconPicker.Margin = _editingCameraTile ? new Thickness(0) : new Thickness(12, 0, 0, 0);
             QuickEntitySearch.Text = "";
             QuickEntityTypeBox.SelectedIndex = 0;
             QuickEntityList.ItemsSource = null;
@@ -197,26 +226,35 @@ public sealed partial class MainWindow
             QuickActionIconPicker.SelectIcon(existing?.Icon);
             QuickActionIconPicker.SetEntity(existing?.EntityId, null);
             SetQuickOperations(null, existing?.Operation);
+            SetCameraActionEditor(existing, selection =>
+            {
+                if (_quickSaving) return;
+                cameraAction = selection;
+                QuickActionDialog.Hide();
+            });
 
             var dialog = QuickActionDialog.ShowAsync();
             try
             {
                 var entities = await _session.GetQuickActionEntitiesAsync(loadCancellation.Token);
-                if (loadCancellation.IsCancellationRequested) return;
+                if (loadCancellation.IsCancellationRequested) return cameraAction;
                 _quickEntities = entities
+                    .Where(entity => !_editingCameraTile || CameraEntityId.IsValid(entity.EntityId))
+                    .Where(entity => camera is null || entity.Operations.Any(QuickActionPolicy.CanShowOnCamera))
                     .Select(entity => new QuickEntityChoice(entity)).ToArray();
                 QuickEntitySearch.IsEnabled = QuickEntityTypeBox.IsEnabled = _quickEntities.Length > 0;
                 FilterQuickEntities(preserveSelection: true);
             }
-            catch (OperationCanceledException) when (loadCancellation.IsCancellationRequested) { return; }
+            catch (OperationCanceledException) when (loadCancellation.IsCancellationRequested) { return cameraAction; }
             catch (Exception ex)
             {
-                if (loadCancellation.IsCancellationRequested) return;
+                if (loadCancellation.IsCancellationRequested) return cameraAction;
                 QuickEntityStatus.Text = existing is null ? UserMessage(ex) :
                     "Entity list unavailable. You can still edit this tile.";
                 QuickEntityStatus.Visibility = Visibility.Visible;
             }
             await dialog;
+            return cameraAction;
         }
         finally
         {
@@ -225,10 +263,28 @@ public sealed partial class MainWindow
             _quickSearchTimer?.Stop();
             _quickDialogOpen = false;
             _editingQuickIndex = null;
+            _editingCameraEntityId = null;
+            _editingCameraTile = false;
             _selectedQuickEntityId = null;
             _suggestedQuickLabel = null;
             _quickEntities = [];
         }
+    }
+
+    private void SetQuickEntityBrowser(bool open)
+    {
+        QuickEntityBrowser.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
+        ChangeCameraButton.Content = open ? "Done" : "Change";
+    }
+
+    private void ChangeCamera_Click(object sender, RoutedEventArgs args)
+    {
+        var open = QuickEntityBrowser.Visibility != Visibility.Visible;
+        SetQuickEntityBrowser(open);
+        if (!open) return;
+        _browseQuickEntities = true;
+        if (_quickEntities.Length > 0) FilterQuickEntities(preserveSelection: true);
+        QuickEntitySearch.Focus(FocusState.Programmatic);
     }
 
     private List<QuickEntityChoice> FilterQuickEntities(bool preserveSelection = false)
@@ -248,7 +304,7 @@ public sealed partial class MainWindow
         QuickEntityList.Visibility = matches.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
         QuickEntityList.ItemsSource = matches;
         QuickEntityList.SelectedItem = matches.FirstOrDefault(entity => entity.EntityId == _selectedQuickEntityId);
-        if (QuickEntityList.SelectedItem is null && !preserveSelection)
+        if (QuickEntityList.SelectedItem is null && !preserveSelection && !_editingCameraTile)
         {
             _selectedQuickEntityId = null;
             QuickActionIconPicker.SetEntity(null, null);
@@ -304,6 +360,7 @@ public sealed partial class MainWindow
             added.SeparatorOpacity = 0;
         if (QuickEntityList.SelectedItem is not QuickEntityChoice choice) return;
         var entity = choice.Entity;
+        var changed = _selectedQuickEntityId != entity.EntityId;
         var original = _editingQuickIndex is { } index ? _session?.Settings.QuickActions[index] : null;
         var operation = _selectedQuickEntityId == entity.EntityId ? SelectedQuickOperation :
             original?.EntityId == entity.EntityId ? original.Operation : null;
@@ -313,6 +370,11 @@ public sealed partial class MainWindow
         _suggestedQuickLabel = entity.Name;
         QuickActionIconPicker.SetEntity(entity.EntityId, entity.Icon);
         SetQuickOperations(entity, operation);
+        if (_editingCameraTile && changed)
+        {
+            SelectedCameraEntity.Text = entity.EntityId;
+            SetQuickEntityBrowser(open: false);
+        }
     }
 
     private void SetQuickOperations(QuickActionEntity? entity, string? selected)
@@ -320,6 +382,8 @@ public sealed partial class MainWindow
         QuickActionOperationBox.Items.Clear();
         // A saved action can be edited while its live capabilities are unavailable.
         var operations = entity?.Operations ?? (selected is null ? [] : [selected]);
+        if (_editingCameraEntityId is not null)
+            operations = operations.Where(QuickActionPolicy.CanShowOnCamera).ToArray();
         foreach (var operation in operations)
             QuickActionOperationBox.Items.Add(new ComboBoxItem
             {
@@ -354,8 +418,9 @@ public sealed partial class MainWindow
             var icon = QuickActionIconPicker.SelectedIcon;
             if (string.IsNullOrEmpty(icon))
                 icon = _quickEntities.FirstOrDefault(entity => entity.EntityId == _selectedQuickEntityId)?.Entity.Icon;
-            var size = (QuickActionSize)QuickActionSizeBox.SelectedIndex;
-            var action = QuickActionPolicy.Create(_selectedQuickEntityId, QuickActionLabelBox.Text, icon, SelectedQuickOperation, size);
+            var size = _editingCameraEntityId is null ? (QuickActionSize)QuickActionSizeBox.SelectedIndex : QuickActionSize.Auto;
+            var action = QuickActionPolicy.Create(_selectedQuickEntityId, QuickActionLabelBox.Text, icon, SelectedQuickOperation, size,
+                _editingCameraEntityId);
             await _session.SaveQuickActionAsync(action, _editingQuickIndex);
             QuickActionDialog.Hide();
             Refresh();

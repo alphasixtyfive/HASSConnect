@@ -94,6 +94,27 @@ public sealed class QuickActionTests
     }
 
     [Fact]
+    public void CameraButtonPlacementSurvivesSettingsSerialization()
+    {
+        var tray = QuickActionPolicy.Create("cover.front_gate", "Open gate", null, QuickActionPolicy.OpenCover);
+        var popup = tray with { CameraEntityId = "camera.front_gate" };
+        var saved = JsonSerializer.Serialize(new Settings { QuickActions = [tray, popup] });
+        var restored = JsonSerializer.Deserialize<Settings>(saved);
+
+        Assert.NotNull(restored);
+        Assert.Equal([tray, popup], QuickActionPolicy.ValidateCollection(restored.QuickActions));
+        Assert.Throws<InvalidDataException>(() => QuickActionPolicy.ValidateCollection([popup, popup]));
+    }
+
+    [Theory]
+    [InlineData("camera.front_gate", "view_camera", "camera.front_door")]
+    [InlineData("light.desk", "brightness", "camera.front_gate")]
+    [InlineData("cover.front_gate", "open_cover", "cover.front_gate")]
+    public void RejectsInvalidCameraButtonPlacements(string entityId, string operation, string cameraEntityId) =>
+        Assert.Throws<ArgumentException>(() =>
+            QuickActionPolicy.Create(entityId, "Action", null, operation, cameraEntityId: cameraEntityId));
+
+    [Fact]
     public async Task IgnoresMalformedStatesAndCoversWithoutUsableActions()
     {
         using var handler = new Handler(_ => Task.FromResult(Response("""

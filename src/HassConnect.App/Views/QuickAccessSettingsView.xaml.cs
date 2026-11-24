@@ -34,7 +34,7 @@ public sealed partial class QuickAccessSettingsView : UserControl
         CountText.Text = $"{actions.Count} of {QuickActionPolicy.MaximumActions} actions";
         AddButton.IsEnabled = registered && actions.Count < QuickActionPolicy.MaximumActions;
         StatusText.Visibility = registered ? Visibility.Collapsed : Visibility.Visible;
-        EmptyText.Visibility = actions.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        EmptyText.Visibility = actions.Any(action => action.CameraEntityId is null) ? Visibility.Collapsed : Visibility.Visible;
         ShortcutValue.Text = QuickAccessShortcutPolicy.Display(settings.QuickAccessShortcut);
         ClearShortcutButton.IsEnabled = settings.QuickAccessShortcut is not null;
     }
@@ -113,10 +113,12 @@ public sealed partial class QuickAccessSettingsView : UserControl
     private void RebuildRows()
     {
         ActionRows.Children.Clear();
-        for (var index = 0; index < _displayedActions.Length; index++)
+        var tiles = Enumerable.Range(0, _displayedActions.Length)
+            .Where(index => _displayedActions[index].CameraEntityId is null).ToArray();
+        for (var index = 0; index < tiles.Length; index++)
         {
-            var action = _displayedActions[index];
-            var rowIndex = index;
+            var rowIndex = tiles[index];
+            var action = _displayedActions[rowIndex];
             var size = action.Size == QuickActionSize.Auto ? "" : $" · {action.Size}";
             var rowActions = new StackPanel
             {
@@ -126,9 +128,10 @@ public sealed partial class QuickAccessSettingsView : UserControl
             };
             rowActions.Children.Add(CreateIconButton("\uE74A", $"Move {action.Label} up", index > 0,
                 () => MoveRequested?.Invoke(rowIndex, -1)));
-            rowActions.Children.Add(CreateIconButton("\uE74B", $"Move {action.Label} down", index < _displayedActions.Length - 1,
+            rowActions.Children.Add(CreateIconButton("\uE74B", $"Move {action.Label} down", index < tiles.Length - 1,
                 () => MoveRequested?.Invoke(rowIndex, 1)));
-            rowActions.Children.Add(CreateIconButton("\uE713", $"Edit {action.Label}", _registered,
+            var editLabel = action.Operation == QuickActionPolicy.ViewCamera ? $"Edit camera tile for {action.Label}" : $"Edit {action.Label}";
+            rowActions.Children.Add(CreateIconButton("\uE713", editLabel, _registered,
                 () => EditRequested?.Invoke(rowIndex)));
             rowActions.Children.Add(CreateIconButton("\uE74D", $"Remove {action.Label}", true,
                 () => RemoveRequested?.Invoke(rowIndex)));
@@ -140,15 +143,15 @@ public sealed partial class QuickAccessSettingsView : UserControl
                 Icon = QuickActionIcons.SourceFor(action.Icon, action.EntityId, 18),
                 AlwaysStackValue = true,
                 TrailingContent = rowActions,
-                ShowDivider = index < _displayedActions.Length - 1
+                ShowDivider = index < tiles.Length - 1
             };
             ToolTipService.SetToolTip(row, action.EntityId);
-            AutomationProperties.SetHelpText(row, $"{index + 1} of {_displayedActions.Length} in the tray popup.");
+            AutomationProperties.SetHelpText(row, $"{index + 1} of {tiles.Length} in the tray popup.");
             ActionRows.Children.Add(row);
         }
     }
 
-    private static Button CreateIconButton(string glyph, string name, bool enabled, Action clicked)
+    internal static Button CreateIconButton(string glyph, string name, bool enabled, Action clicked)
     {
         var button = new Button
         {

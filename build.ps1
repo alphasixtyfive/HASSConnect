@@ -19,11 +19,11 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Publish failed.' }
     & ./tools/Get-ReleaseVersion.ps1 -AppDirectory $OutputDirectory | Out-Null
     Copy-Item -LiteralPath (Join-Path $OutputDirectory 'HassConnect.App.pri') -Destination (Join-Path $OutputDirectory 'resources.pri') -Force
-    foreach ($resource in 'HassConnect.App.exe', 'HassConnect.App.pri', 'resources.pri', 'App.xbf', 'MainWindow.xbf', 'QuickAccessWindow.xbf',
+    foreach ($resource in 'HassConnect.App.exe', 'HassConnect.App.pri', 'resources.pri', 'App.xbf', 'MainWindow.xbf', 'QuickAccessWindow.xbf', 'CameraPreviewWindow.xbf',
         'Views/SettingsRow.xbf', 'Views/SensorSettingsView.xbf', 'Views/NotificationSettingsView.xbf', 'Views/ControlSettingsView.xbf',
         'Views/QuickAccessSettingsView.xbf', 'Views/QuickActionIconPicker.xbf', 'Views/CustomCommandDialog.xbf',
         'Views/QuickAccessLevelTile.xbf',
-        'Views/UpdateSettingsView.xbf', 'Views/AboutView.xbf', 'Assets/app.ico', 'Assets/hass-connect.png') {
+        'Views/UpdateSettingsView.xbf', 'Views/AboutView.xbf', 'Assets/app.ico', 'Assets/hass-connect.png', 'NAudio-LICENSE.txt') {
         if (-not (Test-Path -LiteralPath (Join-Path $OutputDirectory $resource))) { throw "Published app is missing $resource." }
     }
     Write-Host "Ready: $OutputDirectory/HassConnect.App.exe"

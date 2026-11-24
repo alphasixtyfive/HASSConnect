@@ -50,9 +50,39 @@ function Read-Value([string]$id) {
 function Capture([string]$name) {
     & (Join-Path $workspace 'tools/Capture-HassConnectWindow.ps1') -ProcessId $appProcess.Id -OutputPath (Join-Path $output $name) | Out-Null
 }
+function Assert-OtherCopyExits([string]$exePath) {
+    $temp = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
+    $copy = Join-Path $temp ('hass-connect-ui-copy-' + [Guid]::NewGuid().ToString('N'))
+    $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+    $startup = (Get-ItemProperty -LiteralPath $runKey -Name HassConnect -ErrorAction SilentlyContinue).HassConnect
+    $duplicate = $null
+    try {
+        [void][IO.Directory]::CreateDirectory($copy)
+        Copy-Item -Path (Join-Path (Split-Path $exePath) '*') -Destination $copy -Recurse
+        $duplicate = Start-Process -FilePath (Join-Path $copy (Split-Path $exePath -Leaf)) -WindowStyle Hidden -PassThru
+        if (-not $duplicate.WaitForExit(8000) -or $duplicate.ExitCode -ne 0 -or $appProcess.HasExited) {
+            throw 'A copy from another path did not yield to the running instance.'
+        }
+        if ($startup -cne (Get-ItemProperty -LiteralPath $runKey -Name HassConnect -ErrorAction SilentlyContinue).HassConnect) {
+            throw 'An isolated launch changed the Windows startup entry.'
+        }
+    }
+    finally {
+        if ($null -ne $duplicate -and -not $duplicate.HasExited) {
+            Stop-Process -Id $duplicate.Id
+            [void]$duplicate.WaitForExit(3000)
+        }
+        $resolved = [IO.Path]::GetFullPath($copy)
+        if ($resolved.StartsWith($temp, [StringComparison]::OrdinalIgnoreCase) -and
+            ([IO.Path]::GetFileName($resolved) -match '^hass-connect-ui-copy-[0-9a-f]{32}$') -and (Test-Path -LiteralPath $resolved)) {
+            Remove-Item -LiteralPath $resolved -Recurse -Force
+        }
+    }
+}
 
 try {
-    $appProcess = Start-Process -FilePath (Join-Path $workspace $AppPath) -WindowStyle Hidden -PassThru
+    $exePath = Join-Path $workspace $AppPath
+    $appProcess = Start-Process -FilePath $exePath -WindowStyle Hidden -PassThru
     for ($i=0; $i -lt 80; $i++) {
         $script:root = [System.Windows.Automation.AutomationElement]::RootElement.FindFirst(
             [System.Windows.Automation.TreeScope]::Children,
@@ -63,6 +93,20 @@ try {
         Start-Sleep -Milliseconds 100
     }
     if ($null -eq $root) { throw 'The app did not create its window.' }
+    Assert-OtherCopyExits $exePath
+    (Wait-Control 'NotificationsNav').GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
+    $presenceSwitch = [System.Windows.Automation.AndCondition]::new(
+        [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::AutomationIdProperty, 'Switch'),
+        [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::NameProperty, 'Only show while active'))
+    for ($i=0; $i -lt 50; $i++) {
+        $activeOnly = $root.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $presenceSwitch)
+        if ($null -ne $activeOnly) { break }
+        Start-Sleep -Milliseconds 100
+    }
+    if ($null -eq $activeOnly) { throw 'The notification presence filter is missing.' }
+    if ($activeOnly.Current.IsEnabled -or $activeOnly.GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern).Current.ToggleState -ne 'Off') {
+        throw 'The notification presence filter is enabled in the offline test profile.'
+    }
     (Wait-Control 'ControlsNav').GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
     Invoke-Control 'AddCustomCommandButton'
     Set-Value 'CustomCommandNameBox' 'Open File Explorer'
@@ -125,7 +169,7 @@ try {
     Capture 'command-short.png'
     if ($cancel.Current.IsOffscreen) { throw 'Dialog actions cannot be reached in a short window.' }
     Invoke-Control 'CancelCustomCommandButton'
-    Write-Host 'UI checks passed: rounded dialog capture, generated ID, script fields, denied-save recovery, offline preferences, short-window scrolling.'
+    Write-Host 'UI checks passed: single instance across paths, rounded dialog capture, generated ID, script fields, denied-save recovery, offline preferences, short-window scrolling.'
 }
 finally {
     if ($null -ne $appProcess) {

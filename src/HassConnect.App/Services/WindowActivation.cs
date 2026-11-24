@@ -9,7 +9,7 @@ internal static partial class WindowActivation
     public static void RestoreAndActivate(nint window)
     {
         if (window == nint.Zero) return;
-        _ = ShowWindow(window, ShowRestore);
+        if (IsIconic(window)) _ = ShowWindow(window, ShowRestore);
         _ = SetForegroundWindow(window);
     }
 
@@ -17,6 +17,11 @@ internal static partial class WindowActivation
     [return: MarshalAs(UnmanagedType.Bool)]
     [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
     private static partial bool ShowWindow(nint window, int command);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    private static partial bool IsIconic(nint window);
 
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]

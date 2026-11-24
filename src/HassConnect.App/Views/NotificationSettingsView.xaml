@@ -18,6 +18,12 @@
             <StackPanel>
                 <views:SettingsRow x:Name="SoundRow" Title="Sound" Glyph="&#xE767;" IsToggleEnabled="False"
                                    ToggleChanged="Sound_Changed" />
+                <views:SettingsRow x:Name="ActiveOnlyRow" Title="Only show while active" Glyph="&#xE7F8;"
+                                   IsToggleEnabled="False" ToggleChanged="ActiveOnly_Changed"
+                                   ToolTipService.ToolTip="Show notifications and camera popups while Windows is unlocked and you’ve used the PC in the last five minutes. A display reported as off also pauses alerts." />
+                <views:SettingsRow x:Name="CameraPopupRow" Title="Allow automatic camera popups" Glyph="&#xE722;"
+                                   IsToggleEnabled="False" ToggleChanged="CameraPopup_Changed"
+                                   ToolTipService.ToolTip="Open live video when a Home Assistant notification requests a camera popup." />
                 <views:SettingsRow x:Name="TestRow" Title="Test notification" Glyph="&#xE945;" ShowDivider="False">
                     <views:SettingsRow.TrailingContent>
                         <Button x:Name="TestButton" Content="Send test" IsEnabled="False" Click="Test_Click"

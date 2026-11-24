@@ -8,6 +8,9 @@ using HassConnect.HomeAssistant;
 
 namespace HassConnect.App.Services;
 
+internal sealed record CameraOpenRequest(string EntityId, string? Title = null,
+    Func<CancellationToken, Task<string?>>? LoadSnapshot = null, bool Automatic = false);
+
 internal sealed class NotificationService : IAsyncDisposable
 {
     private readonly CancellationTokenSource _lifetime = new();
@@ -23,17 +26,22 @@ internal sealed class NotificationService : IAsyncDisposable
     private readonly DesktopActivation _activation;
     private readonly IPcCommandExecutor _pcCommands;
     private readonly ICustomCommandLauncher _customCommands;
+    private readonly Func<CameraOpenRequest, CancellationToken, Task<bool>> _openCamera;
+    private readonly Func<bool> _isUserActive;
     private bool _disposed;
     private readonly object _taskGate = new();
     private readonly List<Task> _backgroundTasks = [];
 
     public NotificationService(WindowsNotifications windows, DesktopActivation activation,
-        IPcCommandExecutor pcCommands, ICustomCommandLauncher customCommands)
+        IPcCommandExecutor pcCommands, ICustomCommandLauncher customCommands,
+        Func<CameraOpenRequest, CancellationToken, Task<bool>> openCamera, Func<bool> isUserActive)
     {
         _windows = windows;
         _activation = activation;
         _pcCommands = pcCommands;
         _customCommands = customCommands;
+        _openCamera = openCamera;
+        _isUserActive = isUserActive;
         _activation.ActionInvoked += QueueAction;
     }
 
@@ -45,6 +53,7 @@ internal sealed class NotificationService : IAsyncDisposable
     public async Task ConfigureAsync(Settings settings, Credentials? credentials, CancellationToken ct)
     {
         await StopReceiverAsync();
+        if (!ReferenceEquals(_credentials, credentials)) _actions.Clear();
         _settings = settings;
         _credentials = credentials;
         var receiverEnabled = settings.NotificationsEnabled || settings.PcControlEnabled;
@@ -155,25 +164,21 @@ internal sealed class NotificationService : IAsyncDisposable
             RemoveActions(message.Tag!);
             return;
         }
-        string? image = null;
-        if (message.Image is { } source)
+        if (!CanShowIncomingNotification()) return;
+        if (message.Camera is { } cameraEntity && message.CameraPopup && settings.CameraPopupsEnabled &&
+            await _openCamera(new(cameraEntity, message.Title, message.Image is { } source
+                ? token => DownloadImageAsync(settings, credentials, source, token) : null, Automatic: true), ct))
         {
-            try
+            if (message.Tag is { } tag)
             {
-                var bytes = await _images.DownloadAsync(ServerAddress.Parse(settings.ServerUrl), credentials.AccessToken, source, ct);
-                image = await _cache.StoreAsync(bytes, ct);
+                RemoveActions(tag);
+                await _windows.ClearAsync(WindowsTag(tag));
             }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
-            catch (HttpRequestException ex)
-            {
-                // Keep signed image URLs and credentials out of diagnostics.
-                var detail = ex.StatusCode is { } status ? $"HTTP {(int)status}" : ex.HttpRequestError.ToString();
-                AppLog.Write("Notification image", detail);
-            }
-            catch (OperationCanceledException) { AppLog.Write("Notification image", "Download timed out"); }
-            catch (Exception ex) { AppLog.Write("Notification image", ex); }
+            return;
         }
+        var image = message.Image is { } imageSource ? await DownloadImageAsync(settings, credentials, imageSource, ct) : null;
         ct.ThrowIfCancellationRequested();
+        if (!CanShowIncomingNotification()) return;
         var actions = new List<(string Title, string Argument)>();
         var activationTokens = new List<string>();
         foreach (var old in _actions.Where(pair => pair.Value.Created < DateTimeOffset.UtcNow.AddHours(-24))) _actions.TryRemove(old.Key, out _);
@@ -183,25 +188,27 @@ internal sealed class NotificationService : IAsyncDisposable
             try
             {
                 var link = NotificationLink.Resolve(ServerAddress.Parse(settings.ServerUrl), message.Url);
-                launchArgument = Guid.NewGuid().ToString("N");
-                _actions[launchArgument] = new("URI", settings, credentials, DateTimeOffset.UtcNow, message, link);
-                activationTokens.Add(launchArgument);
+                launchArgument = AddAction("URI", link);
             }
             catch (InvalidDataException) { AppLog.Write("Notification link", "Unsupported body URL"); }
         }
+        if (message.Camera is { } camera && _actions.Count < 100)
+        {
+            var viewCamera = AddAction("", camera: new(camera, message.Title,
+                image is { } snapshot ? _ => Task.FromResult<string?>(snapshot) : null));
+            actions.Add(("View live", viewCamera));
+            if (launchArgument == "open") launchArgument = viewCamera;
+        }
         foreach (var action in message.Actions)
         {
-            if (_actions.Count >= 100) break;
-            var key = Guid.NewGuid().ToString("N");
+            if (actions.Count >= 3 || _actions.Count >= 100) break;
             Uri? link = null;
             if (action.Link is not null)
             {
                 try { link = NotificationLink.Resolve(ServerAddress.Parse(settings.ServerUrl), action.Link); }
                 catch (InvalidDataException) { AppLog.Write("Notification link", "Unsupported URL"); continue; }
             }
-            _actions[key] = new(action.Id, settings, credentials, DateTimeOffset.UtcNow, message, link);
-            activationTokens.Add(key);
-            actions.Add((action.Title, key));
+            actions.Add((action.Title, AddAction(action.Id, link)));
         }
         try
         {
@@ -213,6 +220,38 @@ internal sealed class NotificationService : IAsyncDisposable
             foreach (var token in activationTokens) _actions.TryRemove(token, out _);
             throw;
         }
+
+        string AddAction(string id, Uri? link = null, CameraOpenRequest? camera = null)
+        {
+            var token = Guid.NewGuid().ToString("N");
+            _actions[token] = new(id, settings, credentials, DateTimeOffset.UtcNow, message, link, camera);
+            activationTokens.Add(token);
+            return token;
+        }
+    }
+
+    private bool CanShowIncomingNotification()
+    {
+        var settings = _settings;
+        return settings.NotificationsEnabled && (!settings.NotificationsOnlyWhenActive || _isUserActive());
+    }
+
+    private async Task<string?> DownloadImageAsync(Settings settings, Credentials credentials, string source, CancellationToken ct)
+    {
+        try
+        {
+            var bytes = await _images.DownloadAsync(ServerAddress.Parse(settings.ServerUrl), credentials.AccessToken, source, ct);
+            return await _cache.StoreAsync(bytes, ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+        catch (HttpRequestException ex)
+        {
+            var detail = ex.StatusCode is { } status ? $"HTTP {(int)status}" : ex.HttpRequestError.ToString();
+            AppLog.Write("Notification image", detail);
+        }
+        catch (OperationCanceledException) { AppLog.Write("Notification image", "Download timed out"); }
+        catch (Exception ex) { AppLog.Write("Notification image", ex); }
+        return null;
     }
 
     private void ShowNative(NotificationMessage message, Settings settings, string? image,
@@ -221,15 +260,12 @@ internal sealed class NotificationService : IAsyncDisposable
             message.Tag is null ? null : WindowsTag(message.Tag), launchArgument);
 
     private void QueueAction(string argument)
-        => QueueBackground(() => SendActionAsync(argument));
-
-    private void QueueBackground(Func<Task> operation)
     {
         lock (_taskGate)
         {
             if (_disposed) return;
             _backgroundTasks.RemoveAll(task => task.IsCompleted);
-            _backgroundTasks.Add(operation());
+            _backgroundTasks.Add(SendActionAsync(argument));
         }
     }
 
@@ -268,7 +304,13 @@ internal sealed class NotificationService : IAsyncDisposable
         {
             if (_disposed || !_settings.NotificationsEnabled ||
                 !_actions.TryRemove(argument, out var action) ||
-                action.Created < DateTimeOffset.UtcNow.AddHours(-24)) return;
+                action.Created < DateTimeOffset.UtcNow.AddHours(-24) ||
+                !ReferenceEquals(action.Credentials, _credentials)) return;
+            if (action.Camera is { } camera)
+            {
+                await _openCamera(camera, _lifetime.Token);
+                return;
+            }
             if (action.Link is not null)
             {
                 Process.Start(new ProcessStartInfo(action.Link.AbsoluteUri) { UseShellExecute = true });
@@ -345,5 +387,5 @@ internal sealed class NotificationService : IAsyncDisposable
     }
 
     private sealed record PendingAction(string Id, Settings Settings, Credentials Credentials, DateTimeOffset Created,
-        NotificationMessage Message, Uri? Link);
+        NotificationMessage Message, Uri? Link, CameraOpenRequest? Camera);
 }

@@ -6,7 +6,6 @@ using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
-using Microsoft.Win32;
 using HassConnect.App.Services;
 using HassConnect.App.Views;
 using HassConnect.Core;
@@ -24,6 +23,7 @@ public sealed partial class MainWindow : Window
     private bool _connecting;
     private bool _loadingDashboards;
     private CancellationTokenSource? _dashboardCancellation;
+    private CameraPreviewWindow? _cameraPreview;
     private bool _customCommandDialogOpen;
     private double _windowScale;
     internal event Action? QuitRequested;
@@ -47,7 +47,8 @@ public sealed partial class MainWindow : Window
         try
         {
             _session = new SensorSession(new SettingsStore(), _windowHandle,
-                new NotificationService(notifications, activation, new WindowsPcControl(), new CustomCommandLauncher()));
+                new NotificationService(notifications, activation, new WindowsPcControl(), new CustomCommandLauncher(),
+                    OpenCameraFromNotificationAsync, () => _session?.IsUserActive() == true));
             _session.Changed += () => DispatcherQueue.TryEnqueue(Refresh);
             ServerBox.Text = _session.Settings.ServerUrl;
             DeviceBox.Text = _session.Settings.DeviceName;
@@ -63,6 +64,8 @@ public sealed partial class MainWindow : Window
             SensorsPage.SharingChanged += Reporting_Changed;
             NotificationsPage.EnabledChanged += Notifications_Changed;
             NotificationsPage.SoundChanged += NotificationSound_Changed;
+            NotificationsPage.ActiveOnlyChanged += enabled => _ = RunNotificationActionAsync(() => _session.SetNotificationsOnlyWhenActiveAsync(enabled));
+            NotificationsPage.CameraPopupChanged += enabled => _ = RunNotificationActionAsync(() => _session.SetCameraPopupsEnabledAsync(enabled));
             NotificationsPage.TestRequested += TestNotification_Requested;
             ControlsPage.EnabledChanged += PcControl_Changed;
             ControlsPage.CommandChanged += PcCommand_Changed;
@@ -86,8 +89,16 @@ public sealed partial class MainWindow : Window
             ShowError("Unable to load saved settings. Your existing files have been preserved. Check the diagnostic logs.");
             SaveConnectionButton.IsEnabled = false;
         }
-        using var run = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run");
-        StartupRow.IsOn = run?.GetValue("HassConnect") is string;
+        try
+        {
+            StartupRow.IsToggleEnabled = StartupRegistration.IsSupported;
+            StartupRow.IsOn = StartupRegistration.IsEnabled();
+        }
+        catch (Exception ex)
+        {
+            StartupRow.IsToggleEnabled = false;
+            AppLog.Write("Read Windows startup", ex);
+        }
         _loading = false;
         SelectPage(_session?.IsRegistered == true ? "sensors" : "settings");
         Root.Loaded += async (_, _) =>
@@ -95,17 +106,17 @@ public sealed partial class MainWindow : Window
             UpdateTitleBar();
             Root.XamlRoot.Changed += (_, _) => UpdateWindowMinimumSize();
             UpdateWindowMinimumSize();
-            if (Environment.GetCommandLineArgs().Contains("--tray")) AppWindow.Hide();
             await LoadDashboardsAsync(showErrors: false);
         };
     }
 
     internal void ShowWindow()
     {
+        if (_quitting) return;
         _quickAccessWindow?.Hide();
+        Activate();
         AppWindow.Show();
         WindowActivation.RestoreAndActivate(_windowHandle);
-        Activate();
     }
 
     private async void OpenHomeAssistant()
@@ -178,6 +189,7 @@ public sealed partial class MainWindow : Window
         ControlsPage.Update(_session.Settings, _session.IsRegistered,
             _session.RemoteMessagesConnected, _session.RemoteMessageStatus);
         QuickAccessPage.Update(_session.Settings, _session.IsRegistered);
+        _cameraPreview?.RefreshCameraActions();
         RefreshConnectionAction();
         _tray.CanOpenHomeAssistant = !string.IsNullOrWhiteSpace(_session.Settings.ServerUrl);
         _tray.SetStatus(_session.Connected && _session.Paused ? "Connected · sensors disabled" : _session.Status);
@@ -245,6 +257,7 @@ public sealed partial class MainWindow : Window
         if (!await DialogLayout.ShowConfirmationAsync(Root.XamlRoot, "Reset connection?",
                 "Your sensor and command choices will stay. Enter the server address and access token again to reconnect. The device in Home Assistant will remain.",
                 "Reset")) return;
+        _cameraPreview?.Close();
         _connecting = true;
         try
         {
@@ -498,38 +511,24 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void ApplyTheme(string theme) => Root.RequestedTheme = theme switch
+    private void ApplyTheme(string theme)
     {
-        "Light" => ElementTheme.Light,
-        "Dark" => ElementTheme.Dark,
-        _ => ElementTheme.Default
-    };
-
-    private void UpdateTitleBar()
-    {
-        var dark = Root.ActualTheme == ElementTheme.Dark;
-        var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
-        var enabled = dark ? 1 : 0;
-        var background = dark ? 0x202020 : 0xF3F3F3;
-        var foreground = dark ? 0xFFFFFF : 0x000000;
-        DwmSetWindowAttribute(hwnd, 20, ref enabled, sizeof(int));
-        DwmSetWindowAttribute(hwnd, 35, ref background, sizeof(int));
-        DwmSetWindowAttribute(hwnd, 36, ref foreground, sizeof(int));
+        Root.RequestedTheme = theme switch
+        {
+            "Light" => ElementTheme.Light,
+            "Dark" => ElementTheme.Dark,
+            _ => ElementTheme.Default
+        };
+        _cameraPreview?.SetTheme(Root.RequestedTheme);
     }
 
-    [DllImport("dwmapi.dll")]
-    private static extern int DwmSetWindowAttribute(nint window, uint attribute, ref int value, int size);
+    private void UpdateTitleBar() => WindowTitleBar.Apply(this, Root.ActualTheme);
 
     private void Startup_Toggled(object? sender, EventArgs e)
     {
         if (_loading) return;
         var enabled = StartupRow.IsOn;
-        try
-        {
-            using var key = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run");
-            if (enabled) key.SetValue("HassConnect", $"\"{Environment.ProcessPath}\" --tray");
-            else key.DeleteValue("HassConnect", false);
-        }
+        try { StartupRegistration.SetEnabled(enabled); }
         catch (Exception ex)
         {
             StartupRow.IsOn = !enabled;
@@ -589,10 +588,15 @@ public sealed partial class MainWindow : Window
     {
         if (_quitting) return;
         _quitting = true;
-        _dashboardCancellation?.Cancel();
-        NotificationsPage.ClearTransientFeedback();
-        _tray.Dispose();
-        _quickAccessWindow?.Hide(commitPendingLevel: false);
+        try
+        {
+            _tray.Dispose();
+            _dashboardCancellation?.Cancel();
+            _cameraPreview?.Close();
+            NotificationsPage.ClearTransientFeedback();
+            _quickAccessWindow?.Hide(commitPendingLevel: false);
+        }
+        catch (Exception ex) { AppLog.Write("Close app windows", ex); }
         try
         {
             if (_session is not null) await _session.DisposeAsync();
