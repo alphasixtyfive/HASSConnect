@@ -10,7 +10,8 @@ Turn on **Only show while active** to pause incoming alerts and automatic
 camera popups when Windows is locked, the display is off, or five minutes have
 passed since your last input. The check runs on the PC. Home Assistant automations
 can use the shared **Session locked**, **Display state**, and **Idle time** sensors
-to decide whether to send an alert in the first place.
+to decide whether to send an alert. Use **Last seen** to [check for recent sensor
+reports](sensors.md#guard-automations-against-stale-readings).
 
 The connection recovers automatically if Home Assistant is unavailable at startup or
 temporarily disconnects. A rejected access token requires an update in Settings.
